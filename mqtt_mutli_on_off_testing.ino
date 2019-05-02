@@ -64,22 +64,7 @@ void setup() {
     }
   }
 
-  while (status == WL_NO_MODULE) {
-    Serial.println("Communication with WiFi module failed!");
-    delay(10000);
-  }
-
-  while (status != WL_CONNECTED) {
-    Serial.print("Attempting to connect to WPA SSID: ");
-    Serial.println(ssid);
-    WiFi.disconnect();
-    // Connect to WPA/WPA2 network:
-    status = WiFi.begin(ssid, pass);
-    delay(10000);
-  }
-
-  Serial.println("Connected to the WiFi network");
-  Serial.println(WiFi.localIP());
+  wifi_connect();
 
   for (int y = 0; y < NUMSTRIPS; y++)
   {
@@ -119,6 +104,13 @@ void loop() {
     mqtt_connect();
   }
 
+  if (WiFi.status() != WL_CONNECTED) {
+    delay(1);
+    Serial.print(F("WIFI Disconnected. Attempting reconnection."));
+    wifi_connect();
+    return;
+  }
+
   client.loop();
 }
 
@@ -154,6 +146,26 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
   Serial.println("-----------------------");
+}
+
+void wifi_connect() {
+  while (status == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi module failed!");
+    delay(10000);
+  }
+
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to WPA SSID: ");
+    Serial.println(ssid);
+    WiFi.disconnect();
+    // Connect to WPA/WPA2 network:
+    status = WiFi.begin(ssid, pass);
+    delay(10000);
+  }
+
+  Serial.println("Connected to the WiFi network");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
 }
 
 void mqtt_connect() {
