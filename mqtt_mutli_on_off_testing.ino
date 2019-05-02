@@ -12,6 +12,12 @@ char ssid[] = SECRET_SSID;
 char pass[] = SECRET_PASS;
 int status = WL_IDLE_STATUS;
 
+char* MQTT_STATE_TOPIC_PREFIX = "led/"; // e.g. led/<deviceName> and led/<deviceName>/set
+#define MQTT_AVAIL_TOPIC "/availability"
+
+char* birthMessage = "online";
+const char* lwtMessage = "offline";
+
 #define LED_COUNT 300
 #define BRIGHTNESS 255
 
@@ -88,19 +94,7 @@ void setup() {
   client.setServer(BROKER_IP, 1883);
   client.setCallback(callback);
 
-  while (!client.connected()) {
-    Serial.println("Connecting to MQTT...");
-
-    if (client.connect("ESP8266Client", MQTT_USER, MQTT_PW )) {
-      Serial.println("connected");
-    } else {
-      Serial.print("failed with state ");
-      Serial.print(client.state());
-      delay(2000);
-    }
-  }
-
-  client.subscribe("/hello");
+  mqtt_connect();
 
   for (int y = 0; y < NUMSTRIPS; y++)
   {
@@ -121,6 +115,10 @@ void setup() {
 }
 
 void loop() {
+  if (!client.connected()) {
+    mqtt_connect();
+  }
+
   client.loop();
 }
 
@@ -146,7 +144,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     } else {
       for (int i = 0; i < NUMSTRIPS; i++)
       {
-        Serial.print(i);
         Strip = pixelStrings[i];
         for (int j = 0; j < Strip.numPixels(); j++) {
           Strip.setPixelColor(j, Strip.Color(0, 0, 0, 0));
@@ -157,4 +154,27 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
   Serial.println("-----------------------");
+}
+
+void mqtt_connect() {
+  while (!client.connected()) {
+    Serial.print(F("Attempting MQTT connection...\n"));
+
+    char mqttAvailTopic[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(DEV_NAME) + sizeof(MQTT_AVAIL_TOPIC)];
+    sprintf(mqttAvailTopic, "%s%s%s", MQTT_STATE_TOPIC_PREFIX, DEV_NAME, MQTT_AVAIL_TOPIC);
+
+    if (client.connect(DEV_NAME, MQTT_USER, MQTT_PW, mqttAvailTopic, 0, true, lwtMessage)) {
+      Serial.println(F("connected"));
+
+      client.publish(mqttAvailTopic, birthMessage, true);
+
+      client.subscribe("/hello");
+
+    } else {
+      Serial.print(F("failed, rc="));
+      Serial.print(client.state());
+      Serial.println(F(" try again in 5 seconds"));
+      delay(5000);
+    }
+  }
 }
