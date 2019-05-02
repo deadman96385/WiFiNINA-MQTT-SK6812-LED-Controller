@@ -3,8 +3,8 @@
 #include <Adafruit_NeoPixel.h>
 
 #include "arduino_secrets.h"
-//#define BROKER_IP    "192.168.1.172"
-#define BROKER_IP    "172.20.10.3"
+#define BROKER_IP    "192.168.1.172"
+//#define BROKER_IP    "172.20.10.3"
 #define DEV_NAME     "arduiono"
 #define MQTT_USER    "arduiono"
 #define MQTT_PW      "arduionopass"
@@ -14,6 +14,8 @@ int status = WL_IDLE_STATUS;
 
 #define LED_COUNT 300
 #define BRIGHTNESS 255
+
+Adafruit_NeoPixel Strip;
 
 Adafruit_NeoPixel pixelStrings[] = {
   Adafruit_NeoPixel(LED_COUNT, 0, NEO_GRBW),
@@ -39,6 +41,23 @@ void setup() {
     delay(500);
   }
 
+  for (int i = 0; i < NUMSTRIPS; i++)
+  {
+    pixelStrings[i].begin();
+    pixelStrings[i].show(); // Initialize all pixels to 'off'
+    pixelStrings[i].setBrightness(BRIGHTNESS);
+  }
+
+  for (int y = 0; y < NUMSTRIPS; y++)
+  {
+    Strip = pixelStrings[y];
+    for (int j = 0; j < Strip.numPixels(); j++) {
+      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 255));
+      Strip.show();
+      delay(1);
+    }
+  }
+
   while (status == WL_NO_MODULE) {
     Serial.println("Communication with WiFi module failed!");
     delay(10000);
@@ -55,6 +74,16 @@ void setup() {
 
   Serial.println("Connected to the WiFi network");
   Serial.println(WiFi.localIP());
+
+  for (int y = 0; y < NUMSTRIPS; y++)
+  {
+    Strip = pixelStrings[y];
+    for (int j = 0; j < Strip.numPixels(); j++) {
+      Strip.setPixelColor(j, Strip.Color(255, 0, 0, 0));
+      Strip.show();
+      delay(1);
+    }
+  }
 
   client.setServer(BROKER_IP, 1883);
   client.setCallback(callback);
@@ -73,12 +102,22 @@ void setup() {
 
   client.subscribe("/hello");
 
-  for (int i = 0; i < NUMSTRIPS; i++)
+  for (int y = 0; y < NUMSTRIPS; y++)
   {
-    pixelStrings[i].begin();
-    pixelStrings[i].show(); // Initialize all pixels to 'off'
-    pixelStrings[i].setBrightness(BRIGHTNESS);
+    Strip = pixelStrings[y];
+    for (int j = 0; j < Strip.numPixels(); j++) {
+      Strip.setPixelColor(j, Strip.Color(0, 0, 255, 0));
+      Strip.show();
+      delay(1);
+    }
+    delay(500);
+    for (int j = 0; j < Strip.numPixels(); j++) {
+      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 0));
+      Strip.show();
+      delay(1);
+    }
   }
+
 }
 
 void loop() {
@@ -86,8 +125,6 @@ void loop() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-
-  Adafruit_NeoPixel Strip;
 
   Serial.print("Message arrived in topic: ");
   Serial.println(topic);
