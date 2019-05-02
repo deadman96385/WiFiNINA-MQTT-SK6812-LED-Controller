@@ -36,13 +36,12 @@ PubSubClient client(net);
 void setup() {
   Serial.begin(115200);
   while (!Serial) {
-    ; // wait for serial port to connect
+    delay(500);
   }
 
-  if (WiFi.status() == WL_NO_MODULE) {
+  while (status == WL_NO_MODULE) {
     Serial.println("Communication with WiFi module failed!");
-    // don't continue
-    while (true);
+    delay(10000);
   }
 
   while (status != WL_CONNECTED) {
