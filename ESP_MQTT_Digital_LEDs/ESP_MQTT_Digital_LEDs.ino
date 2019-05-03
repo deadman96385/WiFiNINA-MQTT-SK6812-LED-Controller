@@ -1,12 +1,12 @@
 /*
-  To use this code you will need the following dependancies: 
-  
-  - Support for the ESP8266 boards. 
+  To use this code you will need the following dependancies:
+
+  - Support for the ESP8266 boards.
         - You can add it to the board manager by going to File -> Preference and pasting http://arduino.esp8266.com/stable/package_esp8266com_index.json into the Additional Board Managers URL field.
         - Next, download the ESP8266 dependancies by going to Tools -> Board -> Board Manager and searching for ESP8266 and installing it.
-  
+
   - You will also need to download the follow libraries by going to Sketch -> Include Libraries -> Manage Libraries
-      - Adafruit NeoPixel 
+      - Adafruit NeoPixel
       - PubSubClient
       - ArduinoJSON
 */
@@ -79,16 +79,16 @@ void setup() {
   digitalWrite(DATA_PIN_RELAY, LOW);  // Turn the LED strip on
 
   Serial.begin(115200);
-  
+
   delay(500); // Wait for Leds to init and Cap to charge
-  
+
   // End of trinket special code
   strip.setBrightness(maxBrightness);
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
-  
+
   // Standalone startup sequence - Wipe White
-  for(uint16_t i=0; i<ledCount; i++) {
+  for (uint16_t i = 0; i < ledCount; i++) {
     setPixel(i, 0, 0, 0, 255, false);
     showStrip();
     delay(1); // Need delay to be like a yield so it will not restatrt
@@ -99,12 +99,12 @@ void setup() {
   // OK we are on Wifi so we are no standalone.
   setPixel(0, 255, 0, 0, 255, false); // Red tinge on first Pixel
   showStrip();
-  
+
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(callback);
-  
+
   Serial.println(F("Ready"));
-  
+
   // OK we are connected
   setPixel(0, 0, 255, 0, 255, false); // Green tinge on first Pixel
   showStrip();
@@ -119,7 +119,7 @@ void setup_wifi() {
     Serial.println("Communication with WiFi module failed!");
     delay(10000);
   }
-  
+
   while (status != WL_CONNECTED) {
     Serial.print("Attempting to connect to WPA SSID: ");
     Serial.println(WIFI_SSID);
@@ -162,12 +162,12 @@ void setOff() {
   previousBlue = 0;
   previousWhite = 0;
 
-  if (!digitalRead(DATA_PIN_RELAY)) { 
+  if (!digitalRead(DATA_PIN_RELAY)) {
     delay(200); // Wait for sequence to complete and stable
     digitalWrite(DATA_PIN_RELAY, HIGH); // Do NOT write to strip while it has no power. (https://forums.adafruit.com/viewtopic.php?f=47&t=100265)
     Serial.println("LED: OFF");
   }
-  
+
   // NOTE: Should really set the xxx pin to be an input to ensure that data is not sent and to stop potential current flow.
   //Writing to pin in INPUT/High-impedance mode enables/disables the internal pullup resistors. But the high impedance ensures that any current flow through the pin will be negligible.
 }
@@ -178,8 +178,8 @@ void setOn() {
     delay(1000); // Wait for Leds to init and capasitor to charge??
     Serial.println("LED: ON");
   }
-  
-  stateOn = true;  
+
+  stateOn = true;
 }
 
 
@@ -189,7 +189,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(F("Message arrived ["));
   Serial.print(topic);
   Serial.print(F("] "));
-  
+
   char message[length + 1];
   for (int i = 0; i < length; i++) {
     message[i] = (char)payload[i];
@@ -253,7 +253,7 @@ bool processJson(char* message) {
     else if (strcmp(root["state"], off_cmd) == 0) {
       stateOn = false;
     }
-    else { 
+    else {
       sendState();
       return false;
     }
@@ -262,7 +262,7 @@ bool processJson(char* message) {
   if (root.containsKey("transition")) {
     transitionTime = root["transition"];
   }
-  
+
   if (root.containsKey("color")) {
     realRed = root["color"]["r"];
     realGreen = root["color"]["g"];
@@ -281,17 +281,17 @@ bool processJson(char* message) {
   if (root.containsKey("brightness")) {
     brightness = root["brightness"];
   }
-  
+
   if (root.containsKey("pixel")) {
     pixelLen = root["pixel"].size();
     if (pixelLen > sizeof(pixelArray)) {
       pixelLen = sizeof(pixelArray);
     }
     for (int i = 0; i < pixelLen; i++) {
-      pixelArray[i]=root["pixel"][i];
+      pixelArray[i] = root["pixel"][i];
     }
   }
-  
+
   if (root.containsKey("effect")) {
     effectString = root["effect"];
     effect = effectString;
@@ -320,7 +320,7 @@ void sendState() {
 
   char buffer[root.measureLength() + 1];
   root.printTo(buffer, sizeof(buffer));
-  
+
   char combinedArray[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName)];
   sprintf(combinedArray, "%s%s", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
   if (!client.publish(combinedArray, buffer, true)) {
@@ -343,12 +343,12 @@ void reconnect() {
       Serial.println(F("connected"));
 
       // Publish the birth message on connect/reconnect
-      client.publish(mqttAvailTopic, birthMessage, true);      
-      
+      client.publish(mqttAvailTopic, birthMessage, true);
+
       char combinedArray[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + 4];
-      sprintf(combinedArray, "%s%s/set", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space    
+      sprintf(combinedArray, "%s%s/set", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
       client.subscribe(combinedArray);
-      
+
       setOff();
       sendState();
     } else {
@@ -379,13 +379,13 @@ void loop() {
   client.loop(); // Check MQTT
 
   transitionAbort = false; // Because we came from the loop and not 1/2 way though a transition
-  
+
   if (!transitionDone) {  // Once we have completed the transition, No point to keep going though the process
     if (stateOn) {   // if the light is turned on
 
       //EFFECTS
       if (effect == "clear") {
-        setAll(0,0,0,0);
+        setAll(0, 0, 0, 0);
         transitionDone = true;
       }
       if (effect == "solid") {
@@ -400,13 +400,13 @@ void loop() {
         ShowPixels();
       }
       if (effect == "twinkle") {
-        Twinkle(10, (2*transitionTime), false);
+        Twinkle(10, (2 * transitionTime), false);
       }
       if (effect == "cylon bounce") {
-        CylonBounce(4, transitionTime/10, 50);
+        CylonBounce(4, transitionTime / 10, 50);
       }
       if (effect == "fire") {
-        Fire(55,120,(2*transitionTime/2));
+        Fire(55, 120, (2 * transitionTime / 2));
       }
       if (effect == "fade in out") {
         FadeInOut();
@@ -418,22 +418,22 @@ void loop() {
         theaterChase(transitionTime);
       }
       if (effect == "rainbow cycle") {
-        rainbowCycle(transitionTime/5);
+        rainbowCycle(transitionTime / 5);
       }
       if (effect == "color wipe") {
-        colorWipe(transitionTime/20);
+        colorWipe(transitionTime / 20);
       }
       if (effect == "running lights") {
         RunningLights(transitionTime);
       }
       if (effect == "snow sparkle") {
-        SnowSparkle(20, random(transitionTime,(10*transitionTime)));
+        SnowSparkle(20, random(transitionTime, (10 * transitionTime)));
       }
       if (effect == "sparkle") {
         Sparkle(transitionTime);
       }
       if (effect == "twinkle random") {
-        TwinkleRandom(20, (2*transitionTime), false);
+        TwinkleRandom(20, (2 * transitionTime), false);
       }
       if (effect == "bouncing balls") {
         BouncingBalls(3);
@@ -445,7 +445,7 @@ void loop() {
 
 
 
-      
+
       // Run once notification effects
       // Reverts color and effect after run
       if (effect == "color wipe once") {
@@ -454,7 +454,7 @@ void loop() {
         if (effect != "color wipe once") {
           effect = previousEffect;
         }
-        
+
         if (red == 0 && green == 0 && blue == 0 && white == 0) {
           setOff();
         } else {
@@ -463,34 +463,34 @@ void loop() {
         sendState();
       }
 
-    
-    
-//      if (effect == "bpm") {
-//      }
-//      if (effect == "candy cane") {
-//      }
-//      if (effect == "confetti" ) {
-//      }
-//      if (effect == "dots") {
-//      }
-//      if (effect == "glitter") {
-//      }
-//      if (effect == "juggle" ) {                           // eight colored dots, weaving in and out of sync with each other
-//      }
-//      if (effect == "lightning") {
-//      }
-//      if (effect == "police all") {                 //POLICE LIGHTS (TWO COLOR SOLID)
-//      }
-//      if (effect == "police one") {
-//      }
-//      if (effect == "rainbow with glitter") {               // FastLED's built-in rainbow generator with Glitter
-//      }
-      
+
+
+      //      if (effect == "bpm") {
+      //      }
+      //      if (effect == "candy cane") {
+      //      }
+      //      if (effect == "confetti" ) {
+      //      }
+      //      if (effect == "dots") {
+      //      }
+      //      if (effect == "glitter") {
+      //      }
+      //      if (effect == "juggle" ) {                           // eight colored dots, weaving in and out of sync with each other
+      //      }
+      //      if (effect == "lightning") {
+      //      }
+      //      if (effect == "police all") {                 //POLICE LIGHTS (TWO COLOR SOLID)
+      //      }
+      //      if (effect == "police one") {
+      //      }
+      //      if (effect == "rainbow with glitter") {               // FastLED's built-in rainbow generator with Glitter
+      //      }
+
     } else {
       setAll(0, 0, 0, 0);
       transitionDone = true;
     }
   } else {
-	  delay(600); // Save some power? (from 0.9w to 0.4w when off with ESP8266)
+    delay(600); // Save some power? (from 0.9w to 0.4w when off with ESP8266)
   }
 }
