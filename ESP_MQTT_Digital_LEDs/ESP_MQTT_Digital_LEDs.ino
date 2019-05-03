@@ -13,7 +13,6 @@
 // ------------------------------
 // ---- all config in auth.h ----
 // ------------------------------
-#define VERSION F("v3.4 - LedController - https://github.com/DotNetDann - http://dotnetdan.info")
 
 // The maximum mqtt message size, including header, is 128 bytes by default.
 // You must update your PubSubClient.h file manually.......
