@@ -22,6 +22,7 @@
 #include <PubSubClient.h>
 #include <Adafruit_NeoPixel.h>
 #include <WiFiNINA.h>
+#include <ArduinoOTA.h>
 #include "auth-template.h"
 
 /****************************************FOR JSON***************************************/
@@ -115,6 +116,8 @@ void setup() {
   }
 
   setup_wifi();
+  
+  ArduinoOTA.begin(WiFi.localIP(), "Arduino", "password", InternalStorage);
 
   for (int y = 0; y < NUMSTRIPS; y++)
   {
@@ -399,6 +402,8 @@ void loop() {
   }
 
   client.loop(); // Check MQTT
+
+  ArduinoOTA.poll();
 
   transitionAbort = false; // Because we came from the loop and not 1/2 way though a transition
 

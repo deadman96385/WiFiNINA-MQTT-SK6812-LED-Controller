@@ -11,14 +11,14 @@ This project can run standalone. When turned on the white LEDs will light.  This
 - White Selection
 - Brightness 
 - Effects with Animation Speed
-- Over-the-Air (OTA) Upload from the ArduinoIDE! - Coming Soon
+- Over-the-Air (OTA) Upload from the ArduinoIDE!
 
 Most of the effects incorporate the currently selected color while other effects use pre-defined colors. The input_number and automation in the HA configuration example allow you to easily set a transition speed from HA's user interface without needing to use the Services tool. 
 
 The default speed for the effects is hard coded and is set when the light is first turned on. When changing between effects, the previously used transition speed will take over. If the effects don't look great, play around with the slider to adjust the transition speed (AKA the effect's animation speed). 
 
 #### OTA Uploading
-TODO
+ArduionoOTA has native support for WiFiNINA devices and its been implemented here
 
 #### Parts List
 - [Digital RGBW Leds (SK6812RGBW)](https://www.adafruit.com/product/2842)
