@@ -18,7 +18,7 @@ char* MQTT_STATE_TOPIC_PREFIX = "led/"; // e.g. led/<deviceName> and led/<device
 
 /******************************** CONFIG SETUP *******************************/
 #define LED_COUNT_MAXIMUM 300 // Memory allocation. This will reduced the refresh rate so make as small as the maximum number of LED's you have in your config below.
-int ledCount = 30; // Default number of leds if no specific config has been set
+int ledCount = LED_COUNT_MAXIMUM; // Default number of leds if no specific config has been set
 char* deviceName = "led";
 byte maxBrightness = 255;
 
