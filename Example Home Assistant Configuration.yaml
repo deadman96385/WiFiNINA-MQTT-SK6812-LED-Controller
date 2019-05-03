@@ -6,11 +6,12 @@ mqtt:
   password: YOURPASSWORD
 
 light:
-  - platform: mqtt_json
-    name: "Porch Strip"
+  - platform: mqtt
     schema: json
+    name: "Porch Strip"
     state_topic: "led/porch"
     command_topic: "led/porch/set"
+    availability_topic: "led/porch/availability"
     effect: true
     effect_list:
       - solid
@@ -29,7 +30,6 @@ light:
       - twinkle random
       - lightning
     brightness: true
-    flash: true
     rgb: true
     white_value: true
     optimistic: false
