@@ -91,6 +91,9 @@ Adafruit_NeoPixel pixelStrings[] = {
 /********************************** START SETUP*****************************************/
 void setup() {
   Serial.begin(115200);
+  while (!Serial) {
+    delay(500);
+  }
 
   delay(500); // Wait for Leds to init and Cap to charge
 
@@ -292,9 +295,9 @@ bool processJson(char* message) {
   // To prevent our power supply from having a cow. Only RGB OR White
   // Disabled because defaulting to it limits the total brightness if someone has a good power supply
   if (root.containsKey("white_value")) {
-//    realRed = 0;
-//    realGreen = 0;
-//    realBlue = 0;
+    //    realRed = 0;
+    //    realGreen = 0;
+    //    realBlue = 0;
     realWhite = root["white_value"];
   }
 
