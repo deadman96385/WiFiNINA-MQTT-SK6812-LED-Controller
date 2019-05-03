@@ -16,7 +16,13 @@ void showStrip() {
     return;
   }
 
-  strip.show();
+  for (int i = 0; i < NUMSTRIPS; i++)
+  {
+    {
+      Strip = pixelStrings[i];
+      Strip.show();
+    }
+  }
 }
 
 void setPixel(int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
@@ -31,7 +37,13 @@ void setPixel(int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
     w = map(w, 0, 255, 0, brightness);
   }
 
-  strip.setPixelColor(pixel, strip.Color(r, g, b, w));
+  for (int i = 0; i < NUMSTRIPS; i++)
+  {
+    {
+      Strip = pixelStrings[i];
+      Strip.setPixelColor(pixel, Strip.Color(r, g, b, w));
+    }
+  }
 }
 
 void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
@@ -39,12 +51,19 @@ void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
     return;
   }
 
-  for (int i = 0; i < ledCount; i++ ) {
-    setPixel(i, r, g, b, w, false);
+  for (int i = 0; i < NUMSTRIPS; i++)
+  {
+    {
+      Strip = pixelStrings[i];
+      for (int j = 0; j < Strip.numPixels(); j++) {
+        Strip.setPixelColor(j, Strip.Color(r, g, b, w));
+      }
+      Strip.show();
+    }
   }
 
   if (refreshStrip) {
-    showStrip();
+        showStrip();
 
     //Serial.print("Setting LEDs - ");
     //Serial.print("r: ");

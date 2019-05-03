@@ -67,7 +67,24 @@ int pixelArray[50];
 
 WiFiClient net;
 PubSubClient client(net);
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_COUNT_MAXIMUM, DATA_PIN_LEDS, NEO_GRBW + NEO_KHZ800);
+
+Adafruit_NeoPixel Strip;
+
+Adafruit_NeoPixel pixelStrings[] = {
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 0, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 1, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 2, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 3, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 4, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 5, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 6, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 7, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 8, NEO_GRBW),
+  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 9, NEO_GRBW)
+};
+
+#define NUMSTRIPS (sizeof(pixelStrings)/sizeof(pixelStrings[0]))
+
 
 #include "NeoPixel_Effects.h"
 
@@ -77,34 +94,56 @@ void setup() {
 
   delay(500); // Wait for Leds to init and Cap to charge
 
-  // End of trinket special code
-  strip.setBrightness(maxBrightness);
-  strip.begin();
-  strip.show(); // Initialize all pixels to 'off'
+  for (int i = 0; i < NUMSTRIPS; i++)
+  {
+    // End of trinket special code
+    pixelStrings[i].setBrightness(maxBrightness);
+    pixelStrings[i].begin();
+    pixelStrings[i].show(); // Initialize all pixels to 'off'
+  }
 
-  // Standalone startup sequence - Wipe White
-  for (uint16_t i = 0; i < ledCount; i++) {
-    setPixel(i, 0, 0, 0, 255, false);
-    showStrip();
-    delay(1); // Need delay to be like a yield so it will not restatrt
+  for (int y = 0; y < NUMSTRIPS; y++)
+  {
+    Strip = pixelStrings[y];
+    for (int j = 0; j < Strip.numPixels(); j++) {
+      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 255));
+      Strip.show();
+      delay(1); // Need delay to be like a yield so it will not restatrt
+    }
   }
 
   setup_wifi();
 
-  // OK we are on Wifi so we are no standalone.
-  setPixel(0, 255, 0, 0, 255, false); // Red tinge on first Pixel
-  showStrip();
+  for (int y = 0; y < NUMSTRIPS; y++)
+  {
+    Strip = pixelStrings[y];
+    for (int j = 0; j < Strip.numPixels(); j++) {
+      Strip.setPixelColor(j, Strip.Color(255, 0, 0, 0));
+      Strip.show();
+      delay(1);
+    }
+  }
 
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(callback);
 
   Serial.println(F("Ready"));
 
-  // OK we are connected
-  setPixel(0, 0, 255, 0, 255, false); // Green tinge on first Pixel
-  showStrip();
-  delay(500); // Wait so we can see the green before clearing
-  digitalWrite(LED_BUILTIN, HIGH);     // Turn the status LED off
+  for (int y = 0; y < NUMSTRIPS; y++)
+  {
+    Strip = pixelStrings[y];
+    for (int j = 0; j < Strip.numPixels(); j++) {
+      Strip.setPixelColor(j, Strip.Color(0, 0, 255, 0));
+      Strip.show();
+      delay(1);
+    }
+    delay(500);
+    for (int j = 0; j < Strip.numPixels(); j++) {
+      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 0));
+      Strip.show();
+      delay(1);
+    }
+  }
 }
 
 
