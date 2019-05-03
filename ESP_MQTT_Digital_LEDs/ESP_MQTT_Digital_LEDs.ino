@@ -20,15 +20,10 @@
 #define MQTT_MAX_PACKET_SIZE 512
 
 #include <ArduinoJson.h> //Not beta version. Tested with v5.3.14
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266HTTPClient.h>
 #include <PubSubClient.h>
 #include <Adafruit_NeoPixel.h>
-#include <ESP8266mDNS.h>
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
-#include "auth.h"
+#include <WiFiNINA.h>
+#include "auth-template.h"
 
 /****************************************FOR JSON***************************************/
 const int BUFFER_SIZE = JSON_OBJECT_SIZE(60);
@@ -70,13 +65,11 @@ int transitionTime = 50; // 1-150
 int pixelLen = 1;
 int pixelArray[50];
 
-WiFiClient espClient;
-PubSubClient client(espClient);
-ESP8266WebServer server(80);
+WiFiClient net;
+PubSubClient client(net);
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(LED_COUNT_MAXIMUM, DATA_PIN_LEDS, NEO_GRBW + NEO_KHZ800);
 
 #include "NeoPixel_Effects.h"
-#include "web.h"
 
 /********************************** START SETUP*****************************************/
 void setup() {
@@ -88,7 +81,6 @@ void setup() {
   Serial.begin(115200);
   
   delay(500); // Wait for Leds to init and Cap to charge
-  setup_config();
   
   // End of trinket special code
   strip.setBrightness(maxBrightness);
@@ -111,33 +103,6 @@ void setup() {
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(callback);
   
-  server.on("/", ServeWebClients);
-  server.begin();
-
-  //OTA SETUP
-  ArduinoOTA.setPort(OTAport);
-  ArduinoOTA.setHostname(deviceName); // Hostname defaults to esp8266-[ChipID]
-  ArduinoOTA.setPassword((const char *)OTApassword); // No authentication by default
-
-  ArduinoOTA.onStart([]() {
-    Serial.println("Starting");
-  });
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR) Serial.println("End Failed");
-  });
-  ArduinoOTA.begin();
-
   Serial.println(F("Ready"));
   
   // OK we are connected
@@ -150,21 +115,18 @@ void setup() {
 
 /********************************** START SETUP WIFI *****************************************/
 void setup_wifi() {
-  delay(10);
-  Serial.print(F("Connecting to SSID: "));
-  Serial.println(WIFI_SSID);
-  
-  // We start by connecting to a WiFi network
-  WiFi.mode(WIFI_STA);  
-  WiFi.hostname(deviceName);
-
-  if (WiFi.status() != WL_CONNECTED) {  // FIX FOR USING 2.3.0 CORE (only .begin if not connected)
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (status == WL_NO_MODULE) {
+    Serial.println("Communication with WiFi module failed!");
+    delay(10000);
   }
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(F("."));
+  
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to WPA SSID: ");
+    Serial.println(WIFI_SSID);
+    WiFi.disconnect();
+    // Connect to WPA/WPA2 network:
+    status = WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    delay(10000);
   }
 
   Serial.println(F(""));
@@ -415,10 +377,6 @@ void loop() {
   }
 
   client.loop(); // Check MQTT
-
-  ArduinoOTA.handle(); // Check OTA Firmware Updates
-  
-  server.handleClient(); // Check Web page requests
 
   transitionAbort = false; // Because we came from the loop and not 1/2 way though a transition
   
