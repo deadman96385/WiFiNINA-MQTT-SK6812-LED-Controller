@@ -1,14 +1,14 @@
 /*
   To use this code you will need the following dependancies:
 
-  - Support for the ESP8266 boards.
-        - You can add it to the board manager by going to File -> Preference and pasting http://arduino.esp8266.com/stable/package_esp8266com_index.json into the Additional Board Managers URL field.
-        - Next, download the ESP8266 dependancies by going to Tools -> Board -> Board Manager and searching for ESP8266 and installing it.
+  - Support for the MKR boards.
+        - Enable it under the Board Manager
 
   - You will also need to download the follow libraries by going to Sketch -> Include Libraries -> Manage Libraries
+      - WiFiNINA
       - Adafruit NeoPixel
       - PubSubClient
-      - ArduinoJSON
+      - ArduinoJSON V5.3.14
 */
 // ------------------------------
 // ---- all config in auth.h ----
