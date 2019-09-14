@@ -24,6 +24,7 @@
 #include <WiFiNINA.h>
 #include <ArduinoOTA.h>
 #include "auth-template.h"
+#include <InternalStorage.h>
 
 /****************************************FOR JSON***************************************/
 const int BUFFER_SIZE = JSON_OBJECT_SIZE(60);
@@ -65,37 +66,57 @@ int transitionTime = 50; // 1-150
 int pixelLen = 1;
 int pixelArray[50];
 
+int stripStart0 ;
+int stripStart1 ;
+int stripStart2 ;
+int stripStart3 ;
+int stripStart4 ;
+int stripStart5 ;
+int stripStart6 ;
+int stripStart7 ;
+int stripStart8 ;
+int stripStart9 ;
+int stripEnd0 ;
+int stripEnd1 ;
+int stripEnd2 ;
+int stripEnd3 ;
+int stripEnd4 ;
+int stripEnd5 ;
+int stripEnd6 ;
+int stripEnd7 ;
+int stripEnd8 ;
+int stripEnd9 ;
+
+bool strip_dirty[10];
+
 WiFiClient net;
 PubSubClient client(net);
 
 Adafruit_NeoPixel Strip;
 
 Adafruit_NeoPixel pixelStrings[] = {
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 0, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 1, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 2, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 3, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 4, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 5, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 6, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 7, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 8, NEO_GRBW),
-  Adafruit_NeoPixel(LED_COUNT_MAXIMUM, 9, NEO_GRBW)
+  Adafruit_NeoPixel(1, 0, NEO_GRBW),
+  Adafruit_NeoPixel(300, 1, NEO_GRBW),
+  Adafruit_NeoPixel(122, 2, NEO_GRBW),
+  Adafruit_NeoPixel(288, 3, NEO_GRBW),
+  Adafruit_NeoPixel(300, 4, NEO_GRBW),
+  Adafruit_NeoPixel(257, 5, NEO_GRBW),
+  Adafruit_NeoPixel(300, 6, NEO_GRBW),
+  Adafruit_NeoPixel(300, 7, NEO_GRBW),
+  Adafruit_NeoPixel(243, 8, NEO_GRBW),
+  Adafruit_NeoPixel(213, 9, NEO_GRBW)
 };
 
 #define NUMSTRIPS (sizeof(pixelStrings)/sizeof(pixelStrings[0]))
-
 
 #include "NeoPixel_Effects.h"
 
 /********************************** START SETUP*****************************************/
 void setup() {
   Serial.begin(115200);
-  while (!Serial) {
-    delay(500);
-  }
 
-  delay(500); // Wait for Leds to init and Cap to charge
+  pinMode(10, OUTPUT);
+  digitalWrite(10, HIGH);
 
   for (int i = 0; i < NUMSTRIPS; i++)
   {
@@ -103,52 +124,102 @@ void setup() {
     pixelStrings[i].setBrightness(maxBrightness);
     pixelStrings[i].begin();
     pixelStrings[i].show(); // Initialize all pixels to 'off'
+    strip_dirty[i] = false;
   }
 
-  for (int y = 0; y < NUMSTRIPS; y++)
-  {
-    Strip = pixelStrings[y];
-    for (int j = 0; j < Strip.numPixels(); j++) {
-      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 255));
-      Strip.show();
-      delay(1); // Need delay to be like a yield so it will not restatrt
-    }
-  }
+  //
+  //  for (int y = 0; y < NUMSTRIPS; y++)
+  //  {
+  //    Strip = pixelStrings[y];
+  //    for (int j = 0; j < Strip.numPixels(); j++) {
+  //      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 255));
+  //      Strip.show();
+  //      delay(1); // Need delay to be like a yield so it will not restart
+  //    }
+  //  }
 
-  setup_wifi();
-  
-  ArduinoOTA.begin(WiFi.localIP(), "Arduino", "password", InternalStorage);
+  //  setup_wifi();
+  //
+  //  ArduinoOTA.begin(WiFi.localIP(), "Arduino", "password", InternalStorage);
 
-  for (int y = 0; y < NUMSTRIPS; y++)
-  {
-    Strip = pixelStrings[y];
-    for (int j = 0; j < Strip.numPixels(); j++) {
-      Strip.setPixelColor(j, Strip.Color(255, 0, 0, 0));
-      Strip.show();
-      delay(1);
-    }
-  }
+  stripStart1 = 0;
+  stripEnd1 = stripStart1 + 299;
+  stripStart2 = stripEnd1 + 1;
+  stripEnd2 = stripStart2 + 121;
+  stripStart9 = stripEnd2 + 1; // 9 is here due to moving a strip to another pin
+  stripEnd9 = stripStart9 + 212;
+  stripStart3 = stripEnd9 + 1;
+  stripEnd3 = stripStart3 + 287;
+  stripStart4 = stripEnd3 + 1;
+  stripEnd4 = stripStart4 + 299;
+  stripStart5 = stripEnd4 + 1;
+  stripEnd5 = stripStart5 + 256;
+  stripStart6 = stripEnd5 + 1;
+  stripEnd6 = stripStart6 + 299;
+  stripStart7 = stripEnd6 + 1;
+  stripEnd7 = stripStart7 + 299;
+  stripStart8 = stripEnd7 + 1;
+  stripEnd8 = stripStart8 + 242;
 
-  client.setServer(MQTT_SERVER, MQTT_PORT);
-  client.setCallback(callback);
+
+//  setPixel(stripStart1, 0, 0, 255, 0, false);
+//  setPixel(stripEnd1, 0, 0, 255, 0, false);
+//  Strip.show();
+//  setPixel(stripStart2, 0, 255, 0, 0, false);
+//  setPixel(stripEnd2, 0, 255, 0, 0, false);
+//  Strip.show();
+//  setPixel(stripStart3, 255, 0, 0, 0, false);
+//  setPixel(stripEnd3, 255, 0, 0, 0, false);
+//  Strip.show();
+//  setPixel(stripStart4, 0, 0, 0, 255, false);
+//  setPixel(stripEnd4, 0, 0, 0, 255, false);
+//  Strip.show();
+//  setPixel(stripStart5, 0, 0, 0, 255, false);
+//  setPixel(stripEnd5, 0, 0, 0, 255, false);
+//  Strip.show();
+//  setPixel(stripStart6, 0, 0, 0, 255, false);
+//  setPixel(stripEnd6, 0, 0, 0, 255, false);
+//  Strip.show();
+//  setPixel(stripStart7, 0, 0, 0, 255, false);
+//  setPixel(stripEnd7, 0, 0, 0, 255, false);
+//  Strip.show();
+//  setPixel(stripStart8, 0, 0, 0, 255, false);
+//  setPixel(stripEnd8, 0, 0, 0, 255, false);
+//  Strip.show();
+//  setPixel(stripStart9, 0, 0, 0, 255, false);
+//  setPixel(stripEnd9, 0, 0, 0, 255, false);
+//  Strip.show();
+  //
+ // for (int y = stripStart1; y <= stripEnd8; y++)
+//  {
+    //    Serial.println(y, DEC);
+//    setPixel(y, 0, 0, 0, 255, false);
+//    show_dirty();
+//    delay(1); // Need delay to be like a yield so it will not restart
+//    setPixel(y, 0, 0, 0, 0, false);
+     setAll(0, 0, 0, 127);
+//  }
+
+  //  client.setServer(MQTT_SERVER, MQTT_PORT);
+  //  client.setCallback(callback);
 
   Serial.println(F("Ready"));
 
-  for (int y = 0; y < NUMSTRIPS; y++)
-  {
-    Strip = pixelStrings[y];
-    for (int j = 0; j < Strip.numPixels(); j++) {
-      Strip.setPixelColor(j, Strip.Color(0, 0, 255, 0));
-      Strip.show();
-      delay(1);
-    }
-    delay(500);
-    for (int j = 0; j < Strip.numPixels(); j++) {
-      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 0));
-      Strip.show();
-      delay(1);
-    }
-  }
+  //  for (int y = 0; y < NUMSTRIPS; y++)
+  //  {
+  //    Strip = pixelStrings[y];
+  //    for (int j = 0; j < Strip.numPixels(); j++) {
+  //      Strip.setPixelColor(j, Strip.Color(0, 0, 255, 0));
+  //      Strip.show();
+  //      delay(1);
+  //    }
+  //    delay(500);
+  //    for (int j = 0; j < Strip.numPixels(); j++) {
+  //      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 0));
+  //      Strip.show();
+  //      delay(1);
+  //    }
+  //  }
 }
 
 
@@ -200,12 +271,13 @@ void setOff() {
   previousGreen = 0;
   previousBlue = 0;
   previousWhite = 0;
+  digitalWrite(10, LOW);
 }
 
 void setOn() {
+  digitalWrite(10, HIGH);
   stateOn = true;
 }
-
 
 /********************************** START CALLBACK*****************************************/
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -220,42 +292,52 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   message[length] = '\0';
   Serial.println(message);
+  //Serial.println(topic);
 
-  previousEffect = effect;
+  if (strcmp(topic, "led/led/num") == 0) {
+    ledCount0 = atoi(message);
 
-  if (!processJson(message)) {
-    return;
+    Serial.print(F("Number of leds:"));
+    Serial.println(ledCount0);
+
+  } else if (strcmp(topic, "led/led/set") == 0) {
+
+    previousEffect = effect;
+
+    if (!processJson(message)) {
+      return;
+    }
+
+    previousRed = red;
+    previousGreen = green;
+    previousBlue = blue;
+    previousWhite = white;
+
+    if (stateOn) {
+      red = map(realRed, 0, 255, 0, brightness);
+      green = map(realGreen, 0, 255, 0, brightness);
+      blue = map(realBlue, 0, 255, 0, brightness);
+      white = map(realWhite, 0, 255, 0, brightness);
+    } else {
+      red = 0;
+      green = 0;
+      blue = 0;
+      white = 0;
+    }
+
+    Serial.println(effect);
+
+    transitionAbort = true; // Kill the current effect
+    transitionDone = false; // Start a new transition
+
+    if (stateOn) {
+      setOn();
+    } else {
+      setOff(); // NOTE: Will change transitionDone
+    }
+
+    sendState();
   }
-
-  previousRed = red;
-  previousGreen = green;
-  previousBlue = blue;
-  previousWhite = white;
-
-  if (stateOn) {
-    red = map(realRed, 0, 255, 0, brightness);
-    green = map(realGreen, 0, 255, 0, brightness);
-    blue = map(realBlue, 0, 255, 0, brightness);
-    white = map(realWhite, 0, 255, 0, brightness);
-  } else {
-    red = 0;
-    green = 0;
-    blue = 0;
-    white = 0;
-  }
-
-  Serial.println(effect);
-
-  transitionAbort = true; // Kill the current effect
-  transitionDone = false; // Start a new transition
-
-  if (stateOn) {
-    setOn();
-  } else {
-    setOff(); // NOTE: Will change transitionDone
-  }
-
-  sendState();
 }
 
 
@@ -374,6 +456,10 @@ void reconnect() {
       sprintf(combinedArray, "%s%s/set", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
       client.subscribe(combinedArray);
 
+      char combinedArray2[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + 4];
+      sprintf(combinedArray2, "%s%s/num", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
+      client.subscribe(combinedArray2);
+
       setOff();
       sendState();
     } else {
@@ -390,20 +476,20 @@ void reconnect() {
 /********************************** START MAIN LOOP *****************************************/
 void loop() {
 
-  if (!client.connected()) {
-    reconnect();
-  }
+  //  if (!client.connected()) {
+  //    reconnect();
+  //  }
 
-  if (WiFi.status() != WL_CONNECTED) {
-    delay(1);
-    Serial.print(F("WIFI Disconnected. Attempting reconnection."));
-    setup_wifi();
-    return;
-  }
+  //  if (WiFi.status() != WL_CONNECTED) {
+  //    delay(1);
+  //    Serial.print(F("WIFI Disconnected. Attempting reconnection."));
+  //    setup_wifi();
+  //    return;
+  //  }
 
-  client.loop(); // Check MQTT
+  //  client.loop(); // Check MQTT
 
-  ArduinoOTA.poll();
+  //  ArduinoOTA.poll();
 
   transitionAbort = false; // Because we came from the loop and not 1/2 way though a transition
 
@@ -416,12 +502,12 @@ void loop() {
         transitionDone = true;
       }
       if (effect == "solid") {
-        if (transitionTime <= 1) {
-          setAll(red, green, blue, white);
-          transitionDone = true;
-        } else {
-          Fade(transitionTime);
-        }
+        //        if (transitionTime <= 1) {
+        setAll(red, green, blue, white);
+        transitionDone = true;
+        //        } else {
+        //          Fade(transitionTime);
+        //        }
       }
       if (effect == "pixel") {
         ShowPixels();

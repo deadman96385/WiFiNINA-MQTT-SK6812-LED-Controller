@@ -17,8 +17,9 @@ char* MQTT_STATE_TOPIC_PREFIX = "led/"; // e.g. led/<deviceName> and led/<device
 #define DATA_PIN_LEDS   15  // D8 on ESP8266
 
 /******************************** CONFIG SETUP *******************************/
-#define LED_COUNT_MAXIMUM 300 // Default number of leds per strip
-int ledCount = LED_COUNT_MAXIMUM; 
+#define LED_COUNT_MAXIMUM 2323 // Default number of leds per strip
+int ledCount = LED_COUNT_MAXIMUM;
+int ledCount0 = LED_COUNT_MAXIMUM; 
 char* deviceName = "led";
 byte maxBrightness = 255;
 

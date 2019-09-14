@@ -37,11 +37,63 @@ void setPixel(int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
     w = map(w, 0, 255, 0, brightness);
   }
 
+  int StripNumber, LedNumber;
+
+  if (pixel <= stripEnd1) {
+    StripNumber = 1;
+    // This strip is installed in reverse
+    LedNumber = stripEnd1 - pixel; // offset from end not start
+
+  } else if (pixel <= stripEnd2) {
+    StripNumber = 2;
+    // This strip is installed in reverse
+    LedNumber = stripEnd2 - pixel; // offset from end not start
+
+  } else if (pixel <= stripEnd9) {
+    StripNumber = 9;
+    LedNumber = pixel - stripStart9;
+
+  } else if (pixel <= stripEnd3) {
+    StripNumber = 3;
+    LedNumber = pixel - stripStart3;
+
+  } else if (pixel <= stripEnd4) {
+    StripNumber = 4;
+    LedNumber = pixel - stripStart4;
+
+  } else if (pixel <= stripEnd5) {
+    StripNumber = 5;
+    LedNumber = pixel - stripStart5;
+
+  } else if (pixel <= stripEnd6) {
+    StripNumber = 6;
+    LedNumber = pixel - stripStart6;
+
+  } else if (pixel <= stripEnd7) {
+    StripNumber = 7;
+    LedNumber = pixel - stripStart7;
+
+  } else if (pixel <= stripEnd8) {
+    StripNumber = 8;
+    LedNumber = pixel - stripStart8;
+
+  } else {
+    StripNumber = 0;
+    LedNumber = 0;
+  }
+
+  strip_dirty[StripNumber] = true;
+  Strip = pixelStrings[StripNumber];
+  Strip.setPixelColor(LedNumber, Strip.Color(r, g, b, w));
+}
+
+void show_dirty() {
   for (int i = 0; i < NUMSTRIPS; i++)
   {
-    {
+    if (strip_dirty[i]) {
       Strip = pixelStrings[i];
-      Strip.setPixelColor(pixel, Strip.Color(r, g, b, w));
+      Strip.show();
+      strip_dirty[i] = false;
     }
   }
 }
@@ -51,19 +103,12 @@ void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
     return;
   }
 
-  for (int i = 0; i < NUMSTRIPS; i++)
-  {
-    {
-      Strip = pixelStrings[i];
-      for (int j = 0; j < Strip.numPixels(); j++) {
-        Strip.setPixelColor(j, Strip.Color(r, g, b, w));
-      }
-      Strip.show();
-    }
+  for (int j = 0; j < LED_COUNT_MAXIMUM; j++) {
+    setPixel(j, r, g, b, w, false);
   }
 
   if (refreshStrip) {
-        showStrip();
+    show_dirty();
 
     //Serial.print("Setting LEDs - ");
     //Serial.print("r: ");
