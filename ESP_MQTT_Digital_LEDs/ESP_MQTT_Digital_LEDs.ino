@@ -8,7 +8,7 @@
       - WiFiNINA
       - Adafruit NeoPixel
       - PubSubClient
-      - ArduinoJSON V5.3.14
+      - ArduinoJSON V5.13.5
 */
 // ------------------------------
 // ---- all config in auth.h ----
@@ -18,7 +18,7 @@
 // You must update your PubSubClient.h file manually.......
 #define MQTT_MAX_PACKET_SIZE 512
 
-#include <ArduinoJson.h> //Not beta version. Tested with v5.3.14
+#include <ArduinoJson.h> //Not beta version. Tested with v5.13.5
 #include <PubSubClient.h>
 #include <Adafruit_NeoPixel.h>
 #include <WiFiNINA.h>
@@ -52,48 +52,6 @@ byte blue = 0;
 byte white = 0;
 byte brightness = 255;
 
-
-/******************************** OTHER GLOBALS *******************************/
-const char* on_cmd = "ON";
-const char* off_cmd = "OFF";
-const char* effectString = "solid";
-String previousEffect = "solid";
-String effect = "solid";
-bool stateOn = true;
-bool transitionDone = true;
-bool transitionAbort = false;
-int transitionTime = 50; // 1-150
-int pixelLen = 1;
-int pixelArray[50];
-
-int stripStart0 ;
-int stripStart1 ;
-int stripStart2 ;
-int stripStart3 ;
-int stripStart4 ;
-int stripStart5 ;
-int stripStart6 ;
-int stripStart7 ;
-int stripStart8 ;
-int stripStart9 ;
-int stripEnd0 ;
-int stripEnd1 ;
-int stripEnd2 ;
-int stripEnd3 ;
-int stripEnd4 ;
-int stripEnd5 ;
-int stripEnd6 ;
-int stripEnd7 ;
-int stripEnd8 ;
-int stripEnd9 ;
-
-bool strip_dirty[10];
-
-WiFiClient net;
-PubSubClient client(net);
-
-Adafruit_NeoPixel Strip;
-
 Adafruit_NeoPixel pixelStrings[] = {
   Adafruit_NeoPixel(1, 0, NEO_GRBW),
   Adafruit_NeoPixel(300, 1, NEO_GRBW),
@@ -109,12 +67,85 @@ Adafruit_NeoPixel pixelStrings[] = {
 
 #define NUMSTRIPS (sizeof(pixelStrings)/sizeof(pixelStrings[0]))
 
+
+/******************************** OTHER GLOBALS *******************************/
+unsigned long currentMilliSeconds;
+unsigned long effectDelayStart;
+const unsigned long fiveSeconds = 5000;
+const unsigned long tenSeconds = 10000;
+
+const char* on_cmd = "ON";
+const char* off_cmd = "OFF";
+const char* effectString = "solid";
+String previousEffect = "solid";
+String effect = "solid";
+bool effectStart = false;
+unsigned int effectState = 0;
+unsigned int effectMemory[500];
+const int effectMemoryLen = 500;
+bool stateOn = true;
+bool transitionDone = true;
+bool transitionAbort = false;
+int transitionTime = 50; // 1-150
+int pixelLen = 1;
+int pixelArray[50];
+
+int stripStart[NUMSTRIPS] = {
+  0,    // strip 0 which is not used
+  0,    // strip 1
+  300,  // strip 2
+  635,  // strip 3 which comes after strip 9
+  923,  // strip 4
+  1223, // strip 5
+  1480, // strip 6
+  1780, // strip 7
+  2080, // strip 8
+  422   // strip 9 which comes after strip 2
+};
+
+int stripEnd[NUMSTRIPS] = {
+  0,
+  299,
+  421,
+  922,
+  1222,
+  1479,
+  1779,
+  2079,
+  2322,
+  634
+};
+
+bool stripReversed[NUMSTRIPS] = {
+  false,  // strip 0
+  true,   // strip 1
+  true,   // strip 2
+  false,  // strip 3
+  false,  // strip 4
+  false,  // strip 5
+  false,  // strip 6
+  false,  // strip 7
+  false,  // strip 8
+  false   // strip 9
+};
+
+bool strip_dirty[NUMSTRIPS];
+
+WiFiClient net;
+PubSubClient client(net);
+
+Adafruit_NeoPixel Strip;
+
+
+
 #include "NeoPixel_Effects.h"
 
 /********************************** START SETUP*****************************************/
 void setup() {
+
   Serial.begin(115200);
 
+  // Turn on power supply for LED strips. Controller runs on standby power from power supply
   pinMode(10, OUTPUT);
   digitalWrite(10, HIGH);
 
@@ -127,122 +158,80 @@ void setup() {
     strip_dirty[i] = false;
   }
 
-  //
-  //  for (int y = 0; y < NUMSTRIPS; y++)
-  //  {
-  //    Strip = pixelStrings[y];
-  //    for (int j = 0; j < Strip.numPixels(); j++) {
-  //      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 255));
-  //      Strip.show();
-  //      delay(1); // Need delay to be like a yield so it will not restart
-  //    }
-  //  }
-
-  //  setup_wifi();
-  //
-  //  ArduinoOTA.begin(WiFi.localIP(), "Arduino", "password", InternalStorage);
-
-  stripStart1 = 0;
-  stripEnd1 = stripStart1 + 299;
-  stripStart2 = stripEnd1 + 1;
-  stripEnd2 = stripStart2 + 121;
-  stripStart9 = stripEnd2 + 1; // 9 is here due to moving a strip to another pin
-  stripEnd9 = stripStart9 + 212;
-  stripStart3 = stripEnd9 + 1;
-  stripEnd3 = stripStart3 + 287;
-  stripStart4 = stripEnd3 + 1;
-  stripEnd4 = stripStart4 + 299;
-  stripStart5 = stripEnd4 + 1;
-  stripEnd5 = stripStart5 + 256;
-  stripStart6 = stripEnd5 + 1;
-  stripEnd6 = stripStart6 + 299;
-  stripStart7 = stripEnd6 + 1;
-  stripEnd7 = stripStart7 + 299;
-  stripStart8 = stripEnd7 + 1;
-  stripEnd8 = stripStart8 + 242;
-
-
-//  setPixel(stripStart1, 0, 0, 255, 0, false);
-//  setPixel(stripEnd1, 0, 0, 255, 0, false);
-//  Strip.show();
-//  setPixel(stripStart2, 0, 255, 0, 0, false);
-//  setPixel(stripEnd2, 0, 255, 0, 0, false);
-//  Strip.show();
-//  setPixel(stripStart3, 255, 0, 0, 0, false);
-//  setPixel(stripEnd3, 255, 0, 0, 0, false);
-//  Strip.show();
-//  setPixel(stripStart4, 0, 0, 0, 255, false);
-//  setPixel(stripEnd4, 0, 0, 0, 255, false);
-//  Strip.show();
-//  setPixel(stripStart5, 0, 0, 0, 255, false);
-//  setPixel(stripEnd5, 0, 0, 0, 255, false);
-//  Strip.show();
-//  setPixel(stripStart6, 0, 0, 0, 255, false);
-//  setPixel(stripEnd6, 0, 0, 0, 255, false);
-//  Strip.show();
-//  setPixel(stripStart7, 0, 0, 0, 255, false);
-//  setPixel(stripEnd7, 0, 0, 0, 255, false);
-//  Strip.show();
-//  setPixel(stripStart8, 0, 0, 0, 255, false);
-//  setPixel(stripEnd8, 0, 0, 0, 255, false);
-//  Strip.show();
-//  setPixel(stripStart9, 0, 0, 0, 255, false);
-//  setPixel(stripEnd9, 0, 0, 0, 255, false);
-//  Strip.show();
-  //
- // for (int y = stripStart1; y <= stripEnd8; y++)
-//  {
-    //    Serial.println(y, DEC);
-//    setPixel(y, 0, 0, 0, 255, false);
-//    show_dirty();
-//    delay(1); // Need delay to be like a yield so it will not restart
-//    setPixel(y, 0, 0, 0, 0, false);
-     setAll(0, 0, 0, 127);
-//  }
-
-  //  client.setServer(MQTT_SERVER, MQTT_PORT);
-  //  client.setCallback(callback);
+  client.setServer(MQTT_SERVER, MQTT_PORT);
+  client.setCallback(mqttCallback);
 
   Serial.println(F("Ready"));
-
-  //  for (int y = 0; y < NUMSTRIPS; y++)
-  //  {
-  //    Strip = pixelStrings[y];
-  //    for (int j = 0; j < Strip.numPixels(); j++) {
-  //      Strip.setPixelColor(j, Strip.Color(0, 0, 255, 0));
-  //      Strip.show();
-  //      delay(1);
-  //    }
-  //    delay(500);
-  //    for (int j = 0; j < Strip.numPixels(); j++) {
-  //      Strip.setPixelColor(j, Strip.Color(0, 0, 0, 0));
-  //      Strip.show();
-  //      delay(1);
-  //    }
-  //  }
 }
 
 
 /********************************** START SETUP WIFI *****************************************/
-void setup_wifi() {
-  while (status == WL_NO_MODULE) {
-    Serial.println("Communication with WiFi module failed!");
-    delay(10000);
+bool setup_wifi() {
+  static unsigned long wifiDelayStart = 0;
+  static bool waitingForModule = false;
+  static bool waitingForConnect = false;
+
+  if (WiFi.status() == WL_NO_MODULE) {
+    if (!waitingForModule) {
+      waitingForModule = true;
+      wifiDelayStart = currentMilliSeconds;
+      Serial.println("Communication with WiFi module failed!");
+      return false;
+    } else if ((currentMilliSeconds - wifiDelayStart) > tenSeconds) {
+      Serial.println("Communication with WiFi module failed! 10 second delay finished.");
+      wifiDelayStart = currentMilliSeconds;
+      return false;
+    }
+  } else  {
+    waitingForModule = false;
   }
 
-  while (status != WL_CONNECTED) {
+  //  while (WiFi.status() == WL_NO_MODULE) {
+  //    Serial.println("Communication with WiFi module failed!");
+  //    delay(10000);
+  //  }
+
+  if (waitingForConnect) {
+    if (WiFi.status() == WL_CONNECTED) {
+      waitingForConnect = false;
+      Serial.println(F(""));
+      Serial.println(F("WiFi connected"));
+      Serial.print(F("IP address: "));
+      Serial.println(WiFi.localIP());
+      return true;
+    } else if ((currentMilliSeconds - wifiDelayStart) > tenSeconds) {
+      // 10 second timeout so attempt again
+      wifiDelayStart = currentMilliSeconds;
+      Serial.print("Attempting again to connect to WPA SSID: ");
+      Serial.println(WIFI_SSID);
+      WiFi.disconnect();
+      // Connect to WPA/WPA2 network:
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+      return false;
+    }  // else we are in the 10 second wait so do nothing
+  } else if (WiFi.status() != WL_CONNECTED) {
+    waitingForConnect = true;
+    wifiDelayStart = currentMilliSeconds;
     Serial.print("Attempting to connect to WPA SSID: ");
     Serial.println(WIFI_SSID);
     WiFi.disconnect();
     // Connect to WPA/WPA2 network:
-    status = WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    delay(10000);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   }
-
-  Serial.println(F(""));
-  Serial.println(F("WiFi connected"));
-  Serial.print(F("IP address: "));
-  Serial.println(WiFi.localIP());
+  //  while (WiFi.status() != WL_CONNECTED) {
+  //    Serial.print("Attempting to connect to WPA SSID: ");
+  //    Serial.println(WIFI_SSID);
+  //    WiFi.disconnect();
+  //    // Connect to WPA/WPA2 network:
+  //    status = WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  //    delay(10000);
+  //  }
+  //
+  //  Serial.println(F(""));
+  //  Serial.println(F("WiFi connected"));
+  //  Serial.print(F("IP address: "));
+  //  Serial.println(WiFi.localIP());
+  return false;
 }
 
 /*
@@ -266,21 +255,23 @@ void setOff() {
   setAll(0, 0, 0, 0);
   stateOn = false;
   transitionDone = true; // Ensure we dont run the loop
-  transitionAbort = true; // Ensure we about any current effect
+  transitionAbort = true; // Ensure we abort any current effect
   previousRed = 0;
   previousGreen = 0;
   previousBlue = 0;
   previousWhite = 0;
-  digitalWrite(10, LOW);
+  digitalWrite(10, LOW); // Turn off LED power supply
 }
 
 void setOn() {
   digitalWrite(10, HIGH);
+  setAll(0, 0, 0, 0);
   stateOn = true;
 }
 
 /********************************** START CALLBACK*****************************************/
-void callback(char* topic, byte* payload, unsigned int length) {
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  static int ledCount0 = LED_COUNT_MAXIMUM;
   Serial.println(F(""));
   Serial.print(F("Message arrived ["));
   Serial.print(topic);
@@ -355,6 +346,7 @@ bool processJson(char* message) {
   if (root.containsKey("state")) {
     if (strcmp(root["state"], on_cmd) == 0) {
       stateOn = true;
+      effectStart = true;
     }
     else if (strcmp(root["state"], off_cmd) == 0) {
       stateOn = false;
@@ -397,11 +389,13 @@ bool processJson(char* message) {
     for (int i = 0; i < pixelLen; i++) {
       pixelArray[i] = root["pixel"][i];
     }
+    effectStart = true;
   }
 
   if (root.containsKey("effect")) {
     effectString = root["effect"];
     effect = effectString;
+    effectStart = true;
   }
 
   return true;
@@ -437,60 +431,66 @@ void sendState() {
 
 
 /********************************** START RECONNECT *****************************************/
-void reconnect() {
+void attemptReconnect() {
   // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print(F("Attempting MQTT connection..."));
+  //  while (!client.connected()) {
+  Serial.print(F("Attempting MQTT connection..."));
 
-    char mqttAvailTopic[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + sizeof(MQTT_AVAIL_TOPIC)];
-    sprintf(mqttAvailTopic, "%s%s%s", MQTT_STATE_TOPIC_PREFIX, deviceName, MQTT_AVAIL_TOPIC); // with word space
+  char mqttAvailTopic[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + sizeof(MQTT_AVAIL_TOPIC)];
+  sprintf(mqttAvailTopic, "%s%s%s", MQTT_STATE_TOPIC_PREFIX, deviceName, MQTT_AVAIL_TOPIC); // with word space
 
-    // Attempt to connect
-    if (client.connect(deviceName, MQTT_USER, MQTT_PASSWORD, mqttAvailTopic, 0, true, lwtMessage)) {
-      Serial.println(F("connected"));
+  // Attempt to connect
+  if (client.connect(deviceName, MQTT_USER, MQTT_PASSWORD, mqttAvailTopic, 0, true, lwtMessage)) {
+    Serial.println(F("connected"));
 
-      // Publish the birth message on connect/reconnect
-      client.publish(mqttAvailTopic, birthMessage, true);
+    // Publish the birth message on connect/reconnect
+    client.publish(mqttAvailTopic, birthMessage, true);
 
-      char combinedArray[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + 4];
-      sprintf(combinedArray, "%s%s/set", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
-      client.subscribe(combinedArray);
+    char combinedArray[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + 4];
+    sprintf(combinedArray, "%s%s/set", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
+    client.subscribe(combinedArray);
 
-      char combinedArray2[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + 4];
-      sprintf(combinedArray2, "%s%s/num", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
-      client.subscribe(combinedArray2);
+    char combinedArray2[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + 4];
+    sprintf(combinedArray2, "%s%s/num", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
+    client.subscribe(combinedArray2);
 
-      setOff();
-      sendState();
-    } else {
-      Serial.print(F("failed, rc="));
-      Serial.print(client.state());
-      Serial.println(F(" try again in 5 seconds"));
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
+    //      setOff();
+    sendState();
+  } else {
+    Serial.print(F("failed, rc="));
+    Serial.print(client.state());
+    Serial.println(F(" try again in 5 seconds"));
+    // Wait 5 seconds before retrying
+    delay(5000);
   }
+  //  }
 }
 
 
 /********************************** START MAIN LOOP *****************************************/
 void loop() {
+  static bool wifiSeen = false;
+  static unsigned long msgDelayStart;
+  static unsigned long effectDelayStart;
+  currentMilliSeconds = millis();
+  if ((WiFi.status() != WL_CONNECTED) | !wifiSeen) {
+    //    delay(1);
+    //    Serial.print(F("WIFI Disconnected. Attempting reconnection."));
+    wifiSeen = setup_wifi();
+  }
 
-  //  if (!client.connected()) {
-  //    reconnect();
-  //  }
+  if (wifiSeen) {
+    // Bring MQTT on line and process messages
+    if (!client.connected()) {
+      attemptReconnect();
+    } else {
+      client.loop(); // Check MQTT
+    }
 
-  //  if (WiFi.status() != WL_CONNECTED) {
-  //    delay(1);
-  //    Serial.print(F("WIFI Disconnected. Attempting reconnection."));
-  //    setup_wifi();
-  //    return;
-  //  }
+    ArduinoOTA.poll();
+  }
 
-  //  client.loop(); // Check MQTT
-
-  //  ArduinoOTA.poll();
-
+  // This var will go away when all effects are state machine based
   transitionAbort = false; // Because we came from the loop and not 1/2 way though a transition
 
   if (!transitionDone) {  // Once we have completed the transition, No point to keep going though the process
@@ -511,9 +511,10 @@ void loop() {
       }
       if (effect == "pixel") {
         ShowPixels();
+        // transitionDone = true; // done inside ShowPixels()
       }
       if (effect == "twinkle") {
-        Twinkle(10, (2 * transitionTime), false);
+        Twinkle(200, (2 * transitionTime), false);
       }
       if (effect == "cylon bounce") {
         CylonBounce(4, transitionTime / 10, 50);
@@ -603,7 +604,8 @@ void loop() {
       setAll(0, 0, 0, 0);
       transitionDone = true;
     }
-  } else {
-    delay(600); // Save some power? (from 0.9w to 0.4w when off with ESP8266)
+//  } else {
+//    delay(600); // Save some power? (from 0.9w to 0.4w when off with ESP8266)
   }
+  effectStart = false;
 }

@@ -4,25 +4,27 @@
 ///**************************** START EFFECTS *****************************************/
 // Effects from: https://www.tweaking4all.com/hardware/arduino/adruino-led-strip-effects/
 
-
+// This function's need will go away as effects are transformed into state machines rather then loops.
 bool shouldAbortEffect() {
   yield(); // Watchdog timer
   client.loop(); // Update from MQTT
   return transitionAbort;
 }
 
+void showDirty() { // Send updated data to all led strips that need updates
+  for (int i = 0; i < NUMSTRIPS; i++) {
+    if (strip_dirty[i]) {
+      pixelStrings[i].show();
+      strip_dirty[i] = false;
+    }
+  }
+}
+
 void showStrip() {
   if (!stateOn) {
     return;
   }
-
-  for (int i = 0; i < NUMSTRIPS; i++)
-  {
-    {
-      Strip = pixelStrings[i];
-      Strip.show();
-    }
-  }
+  showDirty();
 }
 
 void setPixel(int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
@@ -37,66 +39,31 @@ void setPixel(int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
     w = map(w, 0, 255, 0, brightness);
   }
 
-  int StripNumber, LedNumber;
+  int StripNumber = 0;
+  int LedNumber = 0;
 
-  if (pixel <= stripEnd1) {
-    StripNumber = 1;
-    // This strip is installed in reverse
-    LedNumber = stripEnd1 - pixel; // offset from end not start
-
-  } else if (pixel <= stripEnd2) {
-    StripNumber = 2;
-    // This strip is installed in reverse
-    LedNumber = stripEnd2 - pixel; // offset from end not start
-
-  } else if (pixel <= stripEnd9) {
-    StripNumber = 9;
-    LedNumber = pixel - stripStart9;
-
-  } else if (pixel <= stripEnd3) {
-    StripNumber = 3;
-    LedNumber = pixel - stripStart3;
-
-  } else if (pixel <= stripEnd4) {
-    StripNumber = 4;
-    LedNumber = pixel - stripStart4;
-
-  } else if (pixel <= stripEnd5) {
-    StripNumber = 5;
-    LedNumber = pixel - stripStart5;
-
-  } else if (pixel <= stripEnd6) {
-    StripNumber = 6;
-    LedNumber = pixel - stripStart6;
-
-  } else if (pixel <= stripEnd7) {
-    StripNumber = 7;
-    LedNumber = pixel - stripStart7;
-
-  } else if (pixel <= stripEnd8) {
-    StripNumber = 8;
-    LedNumber = pixel - stripStart8;
-
-  } else {
-    StripNumber = 0;
-    LedNumber = 0;
-  }
-
-  strip_dirty[StripNumber] = true;
-  Strip = pixelStrings[StripNumber];
-  Strip.setPixelColor(LedNumber, Strip.Color(r, g, b, w));
-}
-
-void show_dirty() {
-  for (int i = 0; i < NUMSTRIPS; i++)
-  {
-    if (strip_dirty[i]) {
-      Strip = pixelStrings[i];
-      Strip.show();
-      strip_dirty[i] = false;
+  // Find the correct strip to work with out of virtual all led strip
+  for (int i = 0; i < NUMSTRIPS; i++) {
+    if ((pixel >= stripStart[i]) && (pixel <= stripEnd[i])) {
+      StripNumber = i;
+      break; // found strip so don't check rest
     }
   }
+
+  // Find the correct LED in the selected strip
+  if (stripReversed[StripNumber]) { // is strip reversed?
+    LedNumber = stripEnd[StripNumber] - pixel; // offset from end
+  } else {
+    LedNumber = pixel - stripStart[StripNumber]; // offset from start
+  }
+
+  // Note the strip is dirty because we set a value in it and updating is needed
+  strip_dirty[StripNumber] = true;
+
+  // Actually set the pixel in the strip
+  pixelStrings[StripNumber].setPixelColor(LedNumber, Strip.Color(r, g, b, w));
 }
+
 
 void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
   if (!stateOn) {
@@ -108,9 +75,9 @@ void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
   }
 
   if (refreshStrip) {
-    show_dirty();
+    showDirty();
 
-    //Serial.print("Setting LEDs - ");
+    //Serial.print("Setting all LEDs - ");
     //Serial.print("r: ");
     //Serial.print(r);
     //Serial.print(", g: ");
@@ -122,26 +89,72 @@ void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
   }
 }
 
-
-
+void zeroEffectMemory () {
+  for (int i=0; i < effectMemoryLen; i++) {
+    effectMemory[i] = 0;
+  }
+}
 
 // Twinkle(10, 100, false);
 void Twinkle(int Count, int SpeedDelay, boolean OnlyOne) {
-  setAll(0, 0, 0, 0);
-
-  for (int i = 0; i < Count; i++) {
-    if (shouldAbortEffect()) {
-      return;
-    }
-    setPixel(random(ledCount), red, green, blue, white, false);
-    showStrip();
-    delay(SpeedDelay);
-    if (OnlyOne) {
-      setAll(0, 0, 0, 0);
-    }
+  int currentPixelLocation;
+  Count = min(Count, effectMemoryLen-2);
+  if (effectStart) {
+    effectState = 0; // 0=startup, 1=setNextPixel, 2=delay
   }
 
-  delay(SpeedDelay);
+  switch (effectState) {
+    case 0: // startup
+      effectDelayStart = currentMilliSeconds;
+      zeroEffectMemory();
+      setAll(0, 0, 0, 0, false);
+      effectMemory[effectMemoryLen] = 0; // current pixel location / how far into "Count" state machine is
+      effectMemory[0] = random(ledCount); // pick next LED to light up.
+      setPixel(effectMemory[0], red, green, blue, white, false);
+      showStrip();
+      effectState = 2; // delay
+      break;
+      
+    case 1: // set next pixel
+      ++effectMemory[effectMemoryLen]; // advance to next pixel
+      if (effectMemory[effectMemoryLen] >= Count) { // finished current 0-Count so start again
+        effectState = 0;
+      } else {
+        effectMemory[effectMemory[effectMemoryLen]] = random(ledCount); // pick next LED to light up.
+        setPixel(effectMemory[effectMemory[effectMemoryLen]], red, green, blue, white, false);
+        showStrip();
+        effectState = 2;
+        effectDelayStart = currentMilliSeconds;
+      }
+      break;
+      
+    case 2: // delay
+      if ((currentMilliSeconds - effectDelayStart) > SpeedDelay) {
+        effectState = 1;
+        if (OnlyOne) {
+          setPixel(effectMemory[effectMemory[effectMemoryLen]], 0, 0, 0, 0, false); // turn off previous pixel
+        }
+      }
+      break;
+      
+    default:
+      effectState = 0; // lost current state so restart effect
+      break;
+  }
+
+//  for (int i = 0; i < Count; i++) {
+//    if (shouldAbortEffect()) {
+//      return;
+//    }
+//    setPixel(random(ledCount), red, green, blue, white, false);
+//    showStrip();
+//    delay(SpeedDelay);
+//    if (OnlyOne) {
+//      setAll(0, 0, 0, 0);
+//    }
+//  }
+//
+//  delay(SpeedDelay);
 }
 
 // CylonBounce(4, 10, 50);
@@ -610,22 +623,12 @@ void Lightning(int SpeedDelay) {
 }
 
 void ShowPixels() {
-  // If there are only 2 items in the array then we are setting from and to
+  // If there are only 2 items in the array then we are setting from and to othersise set each led in the array.
   if (pixelLen == 2) {
-    // Make sure smallest one first, less than max pixel
     //Serial.println(F("ShowPixels-Range"));
 
-    int startL = pixelArray[0];
-    int endL = pixelArray[1];
-    if (startL > ledCount) {
-      startL = ledCount;
-    }
-    if (endL > ledCount) {
-      endL = ledCount;
-    }
-    if (startL > endL) {
-      startL = 0;
-    }
+    int startL = max(0,min(pixelArray[0],pixelArray[1])); // choose smaller of array entries
+    int endL = min(ledCount,max(pixelArray[0],pixelArray[1])); // choose larger of array entries
 
     for (int i = startL; i < endL; i++) {
       setPixel(i, red, green, blue, white, true);
@@ -636,14 +639,10 @@ void ShowPixels() {
     //Serial.println(F("ShowPixels-Array"));
 
     for (int i = 0; i < pixelLen; i++) {
-      int pixel = pixelArray[i];
-      if (pixel > ledCount) {
-        pixel = ledCount;
-      }
-      setPixel(pixel, red, green, blue, white, true);
+      // constrain the pixel in the array to a valid pixel number in the strip
+      setPixel(constrain(pixelArray[i],0,ledCount), red, green, blue, white, true);
     }
   }
-
   showStrip();
   transitionDone = true;
 }
