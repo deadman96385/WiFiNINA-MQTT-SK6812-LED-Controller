@@ -82,7 +82,7 @@ String effect = "solid";
 bool effectStart = false;
 unsigned int effectState = 0;
 unsigned int effectMemory[500];
-const int effectMemoryLen = 500;
+const int effectMemoryLen = 499;
 bool stateOn = true;
 bool transitionDone = true;
 bool transitionAbort = false;
@@ -144,6 +144,9 @@ Adafruit_NeoPixel Strip;
 void setup() {
 
   Serial.begin(115200);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
 
   // Turn on power supply for LED strips. Controller runs on standby power from power supply
   pinMode(10, OUTPUT);
@@ -160,7 +163,6 @@ void setup() {
 
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(mqttCallback);
-
   Serial.println(F("Ready"));
 }
 
@@ -204,7 +206,6 @@ bool setup_wifi() {
       wifiDelayStart = currentMilliSeconds;
       Serial.print("Attempting again to connect to WPA SSID: ");
       Serial.println(WIFI_SSID);
-      WiFi.disconnect();
       // Connect to WPA/WPA2 network:
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
       return false;
@@ -214,7 +215,6 @@ bool setup_wifi() {
     wifiDelayStart = currentMilliSeconds;
     Serial.print("Attempting to connect to WPA SSID: ");
     Serial.println(WIFI_SSID);
-    WiFi.disconnect();
     // Connect to WPA/WPA2 network:
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   }
@@ -475,7 +475,6 @@ void loop() {
   currentMilliSeconds = millis();
   if ((WiFi.status() != WL_CONNECTED) | !wifiSeen) {
     //    delay(1);
-    //    Serial.print(F("WIFI Disconnected. Attempting reconnection."));
     wifiSeen = setup_wifi();
   }
 
@@ -514,7 +513,7 @@ void loop() {
         // transitionDone = true; // done inside ShowPixels()
       }
       if (effect == "twinkle") {
-        Twinkle(200, (2 * transitionTime), false);
+        Twinkle(200, (2 * transitionTime), true);
       }
       if (effect == "cylon bounce") {
         CylonBounce(4, transitionTime / 10, 50);
