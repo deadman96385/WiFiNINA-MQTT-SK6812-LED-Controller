@@ -18,7 +18,7 @@ const char* MQTT_STATE_TOPIC_PREFIX = "led/"; // e.g. led/<deviceName> and led/<
 
 /******************************** CONFIG SETUP *******************************/
 #define LED_COUNT_MAXIMUM 2323 // Default number of leds per strip
-const int ledCount = LED_COUNT_MAXIMUM;
+const unsigned int ledCount = LED_COUNT_MAXIMUM;
 const char* deviceName = "led";
 byte maxBrightness = 255;
 

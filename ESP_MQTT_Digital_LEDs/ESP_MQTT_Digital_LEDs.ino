@@ -1,3 +1,4 @@
+
 /*
   To use this code you will need the following dependancies:
 
@@ -25,6 +26,7 @@
 #include <ArduinoOTA.h>
 #include "auth-template.h"
 #include <InternalStorage.h>
+
 
 /****************************************FOR JSON***************************************/
 const int BUFFER_SIZE = JSON_OBJECT_SIZE(15);
@@ -82,16 +84,18 @@ String effect = "solid";
 bool effectStart = false;
 unsigned int effectState = 0;
 unsigned int effectMemory[500];
-const int effectMemoryLen = 499;
+const unsigned int effectMemoryLen = 499;
+unsigned int firstPixel = 0;
+unsigned int lastPixel = ledCount;
 bool stateOn = true;
 bool transitionDone = true;
 bool transitionAbort = false;
-int transitionTime = 50; // 1-150
-int pixelLen = 1;
-int pixelArray[50];
-int effectParameter[4] = {5,10,1250,1391};
+unsigned int transitionTime = 50; // 1-150
+unsigned int pixelLen = 1;
+unsigned int pixelArray[50];
+unsigned int effectParameter[4] = {5,10,1250,1391};
 
-int stripStart[NUMSTRIPS] = {
+const unsigned int stripStart[NUMSTRIPS] = {
   0,    // strip 0 which is not used
   0,    // strip 1
   300,  // strip 2
@@ -104,7 +108,7 @@ int stripStart[NUMSTRIPS] = {
   422   // strip 9 which comes after strip 2
 };
 
-int stripEnd[NUMSTRIPS] = {
+const unsigned int stripEnd[NUMSTRIPS] = {
   0,
   299,
   421,
@@ -117,7 +121,7 @@ int stripEnd[NUMSTRIPS] = {
   634
 };
 
-bool stripReversed[NUMSTRIPS] = {
+const bool stripReversed[NUMSTRIPS] = {
   false,  // strip 0
   true,   // strip 1
   true,   // strip 2
@@ -141,6 +145,24 @@ Adafruit_NeoPixel Strip;
 
 #include "NeoPixel_Effects.h"
 
+#ifdef __arm__
+// should use uinstd.h to define sbrk but Due causes a conflict
+extern "C" char* sbrk(int incr);
+#else  // __ARM__
+extern char *__brkval;
+#endif  // __arm__
+
+int freeMemory() {
+  char top;
+#ifdef __arm__
+  return &top - reinterpret_cast<char*>(sbrk(0));
+#elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
+  return &top - __brkval;
+#else  // __arm__
+  return __brkval ? &top - __brkval : &top - __malloc_heap_start;
+#endif  // __arm__
+}
+
 /********************************** START SETUP*****************************************/
 void setup() {
 
@@ -148,12 +170,15 @@ void setup() {
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
+  Serial.println ();
+  Serial.print (F("Free memory = "));
+  Serial.println (freeMemory ());
 
   // Turn on power supply for LED strips. Controller runs on standby power from power supply
   pinMode(10, OUTPUT);
   digitalWrite(10, HIGH);
 
-  for (int i = 0; i < NUMSTRIPS; i++)
+  for (unsigned int i = 0; i < NUMSTRIPS; i++)
   {
     // End of trinket special code
     pixelStrings[i].setBrightness(maxBrightness);
@@ -165,6 +190,8 @@ void setup() {
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(mqttCallback);
   Serial.println(F("Ready"));
+  Serial.print (F("Free memory = "));
+  Serial.println (freeMemory ());
 }
 
 
@@ -273,7 +300,6 @@ void setOn() {
 
 /********************************** START CALLBACK*****************************************/
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  static int ledCount0 = LED_COUNT_MAXIMUM;
   Serial.println(F(""));
   Serial.print(F("Message arrived ["));
   Serial.print(topic);
@@ -287,14 +313,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
   //Serial.println(topic);
 
-  if (strcmp(topic, "led/led/num") == 0) {
-    ledCount0 = atoi(message);
-
-    Serial.print(F("Number of leds:"));
-    Serial.println(ledCount0);
-
-  } else if (strcmp(topic, "led/led/set") == 0) {
-
+  if (strcmp(topic, "led/led/set") == 0) {
     previousEffect = effect;
 
     if (!processJson(message)) {
@@ -400,6 +419,14 @@ bool processJson(char* message) {
     effectStart = true;
   }
 
+  if (root.containsKey("firstPixel")) {
+    firstPixel = root["firstPixel"];
+  }
+  
+  if (root.containsKey("lastPixel")) {
+    lastPixel = root["lastPixel"];
+  }
+  
   if (root.containsKey("parameter1")) {
     effectParameter[0] = root["parameter1"];
   }
@@ -523,10 +550,10 @@ void loop() {
         //          Fade(transitionTime);
         //        }
       }
-      if (effect == "pixel") {
-        ShowPixels();
-        // transitionDone = true; // done inside ShowPixels()
-      }
+//      if (effect == "pixel") {
+//        ShowPixels();
+//        // transitionDone = true; // done inside ShowPixels()
+//      }
       if (effect == "twinkle") {
         Twinkle(200, (2 * transitionTime), true);
       }
