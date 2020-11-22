@@ -311,7 +311,7 @@ void FadeInOut() {
       effectMemory[1] = 0; // current fade level
       setAll(0, 0, 0, 0, false);
       effectState = 1; // Display fade
-    //break;
+//      break;
 
     case 1: // display fade
       // map (value, fromLow, fromHigh, toLow, toHigh)
@@ -324,7 +324,7 @@ void FadeInOut() {
       effectMemory[1] += effectMemory[0]; // move to next fade level
       if (effectMemory[1] == 255) {
         effectMemory[0] = -1;
-      } else if (effectMemory[1] = 0) {
+      } else if (effectMemory[1] == 0) {
         effectMemory[0] = 1;
       }
       effectState = 1;

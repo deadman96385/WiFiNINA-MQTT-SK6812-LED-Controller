@@ -31,7 +31,7 @@
 /****************************************FOR JSON***************************************/
 const int BUFFER_SIZE = JSON_OBJECT_SIZE(15);
 
-char* birthMessage = "online";
+const char* birthMessage = "online";
 const char* lwtMessage = "offline";
 
 /*********************************** LED Defintions ********************************/
@@ -93,7 +93,7 @@ bool transitionAbort = false;
 unsigned int transitionTime = 50; // 1-150
 unsigned int pixelLen = 1;
 unsigned int pixelArray[50];
-unsigned int effectParameter[4] = {5,10,1250,1391};
+unsigned int effectParameter[4] = {5, 10, 1250, 1391};
 
 const unsigned int stripStart[NUMSTRIPS] = {
   0,    // strip 0 which is not used
@@ -171,7 +171,7 @@ void setup() {
     ; // wait for serial port to connect. Needed for native USB port only
   }
   Serial.println ();
-  Serial.print (F("Free memory = "));
+  Serial.print (F("Initial Free memory = "));
   Serial.println (freeMemory ());
 
   // Turn on power supply for LED strips. Controller runs on standby power from power supply
@@ -190,7 +190,7 @@ void setup() {
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(mqttCallback);
   Serial.println(F("Ready"));
-  Serial.print (F("Free memory = "));
+  Serial.print (F("End of setup Free memory = "));
   Serial.println (freeMemory ());
 }
 
@@ -422,11 +422,11 @@ bool processJson(char* message) {
   if (root.containsKey("firstPixel")) {
     firstPixel = root["firstPixel"];
   }
-  
+
   if (root.containsKey("lastPixel")) {
     lastPixel = root["lastPixel"];
   }
-  
+
   if (root.containsKey("parameter1")) {
     effectParameter[0] = root["parameter1"];
   }
@@ -492,11 +492,6 @@ void attemptReconnect() {
     sprintf(combinedArray, "%s%s/set", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
     client.subscribe(combinedArray);
 
-    char combinedArray2[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + 4];
-    sprintf(combinedArray2, "%s%s/num", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
-    client.subscribe(combinedArray2);
-
-    //      setOff();
     sendState();
   } else {
     Serial.print(F("failed, rc="));
@@ -524,6 +519,8 @@ void loop() {
     // Bring MQTT on line and process messages
     if (!client.connected()) {
       attemptReconnect();
+      Serial.println ();
+      Serial.println (freeMemory ());
     } else {
       client.loop(); // Check MQTT
     }
@@ -550,16 +547,16 @@ void loop() {
         //          Fade(transitionTime);
         //        }
       }
-//      if (effect == "pixel") {
-//        ShowPixels();
-//        // transitionDone = true; // done inside ShowPixels()
-//      }
+      //      if (effect == "pixel") {
+      //        ShowPixels();
+      //        // transitionDone = true; // done inside ShowPixels()
+      //      }
       if (effect == "twinkle") {
         Twinkle(200, (2 * transitionTime), true);
       }
       if (effect == "cylon bounce") {
-//        CylonBounce(4, transitionTime / 10, 50);
-        CylonBounce(effectParameter[0], effectParameter[1], effectParameter[1]*10);
+        //        CylonBounce(4, transitionTime / 10, 50);
+        CylonBounce(effectParameter[0], effectParameter[1], effectParameter[1] * 10);
       }
       if (effect == "fire") {
         Fire(55, 120, (2 * transitionTime / 2));
@@ -646,8 +643,8 @@ void loop() {
       setAll(0, 0, 0, 0);
       transitionDone = true;
     }
-//  } else {
-//    delay(600); // Save some power? (from 0.9w to 0.4w when off with ESP8266)
+    //  } else {
+    //    delay(600); // Save some power? (from 0.9w to 0.4w when off with ESP8266)
   }
   effectStart = false;
 }
