@@ -16,7 +16,7 @@
 
 // The maximum mqtt message size, including header, is 128 bytes by default.
 // You must update your PubSubClient.h file manually.......
-#define MQTT_MAX_PACKET_SIZE 512
+#define MQTT_MAX_PACKET_SIZE 1024
 
 #include <ArduinoJson.h> //Not beta version. Tested with v5.13.5
 #include <PubSubClient.h>
@@ -27,7 +27,7 @@
 #include <InternalStorage.h>
 
 /****************************************FOR JSON***************************************/
-const int BUFFER_SIZE = JSON_OBJECT_SIZE(60);
+const int BUFFER_SIZE = JSON_OBJECT_SIZE(15);
 
 char* birthMessage = "online";
 const char* lwtMessage = "offline";
@@ -89,7 +89,7 @@ bool transitionAbort = false;
 int transitionTime = 50; // 1-150
 int pixelLen = 1;
 int pixelArray[50];
-int effectParameter[4] = {0,0,0,0};
+int effectParameter[4] = {5,10,1250,1391};
 
 int stripStart[NUMSTRIPS] = {
   0,    // strip 0 which is not used
@@ -182,6 +182,7 @@ bool setup_wifi() {
       return false;
     } else if ((currentMilliSeconds - wifiDelayStart) > tenSeconds) {
       Serial.println(F("Communication with WiFi module failed! 10 second delay finished."));
+      WiFi.init();
       wifiDelayStart = currentMilliSeconds;
       return false;
     }
@@ -500,7 +501,7 @@ void loop() {
       client.loop(); // Check MQTT
     }
 
-    ArduinoOTA.poll();
+    //ArduinoOTA.poll();
   }
 
   // This var will go away when all effects are state machine based

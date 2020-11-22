@@ -206,7 +206,7 @@ void CylonBounce(int EyeSize, int SpeedDelay, int ReturnDelay) {
       }
       break;
 
-    case 4: // move delay
+    case 4: // end delay
       if ((currentMilliSeconds - effectDelayStart) > ReturnDelay) {
         effectState = 1;
       }
