@@ -77,28 +77,27 @@ void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
   if (refreshStrip) {
     showDirty();
 
-    //Serial.print("Setting all LEDs - ");
-    //Serial.print("r: ");
+    //Serial.print(F("Setting all LEDs - ");
+    //Serial.print(F("r: "));
     //Serial.print(r);
-    //Serial.print(", g: ");
+    //Serial.print(F(", g: "));
     //Serial.print(g);
-    //Serial.print(", b: ");
+    //Serial.print(F(", b: "));
     //Serial.print(b);
-    //Serial.print(", w: ");
+    //Serial.print(F(", w: "));
     //Serial.println(w);
   }
 }
 
 void zeroEffectMemory () {
-  for (int i=0; i < effectMemoryLen; i++) {
+  for (int i = 0; i < effectMemoryLen; i++) {
     effectMemory[i] = 0;
   }
 }
 
 // Twinkle(10, 100, false);
 void Twinkle(int Count, int SpeedDelay, boolean OnlyOne) {
-  int currentPixelLocation;
-  Count = min(Count, effectMemoryLen-2);
+  Count = min(Count, effectMemoryLen - 2);
   if (effectStart) {
     effectState = 0; // 0=startup, 1=setNextPixel, 2=delay
   }
@@ -114,7 +113,7 @@ void Twinkle(int Count, int SpeedDelay, boolean OnlyOne) {
       showStrip();
       effectState = 2; // delay
       break;
-      
+
     case 1: // set next pixel
       ++effectMemory[effectMemoryLen]; // advance to next pixel
       if (effectMemory[effectMemoryLen] >= Count) { // finished current 0-Count so start again
@@ -127,7 +126,7 @@ void Twinkle(int Count, int SpeedDelay, boolean OnlyOne) {
         effectDelayStart = currentMilliSeconds;
       }
       break;
-      
+
     case 2: // delay
       if ((currentMilliSeconds - effectDelayStart) > SpeedDelay) {
         effectState = 1;
@@ -136,61 +135,118 @@ void Twinkle(int Count, int SpeedDelay, boolean OnlyOne) {
         }
       }
       break;
-      
+
     default:
       effectState = 0; // lost current state so restart effect
       break;
   }
 
-//  for (int i = 0; i < Count; i++) {
-//    if (shouldAbortEffect()) {
-//      return;
-//    }
-//    setPixel(random(ledCount), red, green, blue, white, false);
-//    showStrip();
-//    delay(SpeedDelay);
-//    if (OnlyOne) {
-//      setAll(0, 0, 0, 0);
-//    }
-//  }
-//
-//  delay(SpeedDelay);
+  //  for (int i = 0; i < Count; i++) {
+  //    if (shouldAbortEffect()) {
+  //      return;
+  //    }
+  //    setPixel(random(ledCount), red, green, blue, white, false);
+  //    showStrip();
+  //    delay(SpeedDelay);
+  //    if (OnlyOne) {
+  //      setAll(0, 0, 0, 0);
+  //    }
+  //  }
+  //
+  //  delay(SpeedDelay);
 }
 
 // CylonBounce(4, 10, 50);
 void CylonBounce(int EyeSize, int SpeedDelay, int ReturnDelay) {
+  if (effectStart) {
+    effectState = 0; // 0=startup, 1=display eye, 2=erase eye, 3=MoveDelay, 4=EndDelay
 
-  for (int i = 0; i < (ledCount - EyeSize - 2); i++) {
-    if (shouldAbortEffect()) {
-      return;
-    }
-    setAll(0, 0, 0, 0, false);
-    setPixel(i, red / 10, green / 10, blue / 10, white / 10, false);
-    for (int j = 1; j <= EyeSize; j++) {
-      setPixel(i + j, red, green, blue, white, false);
-    }
-    setPixel(i + EyeSize + 1, red / 10, green / 10, blue / 10, white / 10, false);
-    showStrip();
-    delay(SpeedDelay);
   }
 
-  delay(ReturnDelay);
+  switch (effectState) {
+    case 0: // startup
+      effectMemory[0] = 1; // step increment 1 or -1 for direction to move
+      effectMemory[1] = effectParameter[2]; // eye starting position
+      setAll(0, 0, 0, 0, false);
+      effectState = 1; // Display eye
+      break;
 
-  for (int i = (ledCount - EyeSize - 2); i > 0; i--) {
-    if (shouldAbortEffect()) {
-      return;
-    }
-    setAll(0, 0, 0, 0, false);
-    setPixel(i, red / 10, green / 10, blue / 10, white / 10, false);
-    for (int j = 1; j <= EyeSize; j++) {
-      setPixel(i + j, red, green, blue, white, false);
-    }
-    setPixel(i + EyeSize + 1, red / 10, green / 10, blue / 10, white / 10, false);
-    showStrip();
-    delay(SpeedDelay);
+    case 1: // Display eye
+      setPixel(effectMemory[1], red / 10, green / 10, blue / 10, white / 10, false);
+      for (int j = 1; j <= EyeSize; j++) {
+        setPixel(effectMemory[1] + j, red, green, blue, white, false);
+      }
+      setPixel(effectMemory[1] + EyeSize + 1, red / 10, green / 10, blue / 10, white / 10, false);
+      showStrip();
+      effectState = 2; // Erase eye in memory
+      break;
+
+    case 2: // Erase eye
+      for (int j = 0; j <= EyeSize+1; j++) {
+        setPixel(effectMemory[1] + j, 0, 0, 0, 0, false);
+      }
+      if ((effectMemory[1]+EyeSize+2 >= effectParameter[3]) && (effectMemory[0] == 1)) {
+        // At high end of eye sweep, So reverse direction and do end delay
+        effectMemory[0] = -1;
+        effectState = 4; // end delay
+      } else if ((effectMemory[1] <= effectParameter[2]) && (effectMemory[0] == -1)) {
+        // At low end of eye sweep, so reverse direction and do end delay
+        effectMemory[0] = 1;
+        effectState = 4; // end delay
+      } else {
+        effectState = 3; // move delay
+      }
+      effectMemory[1] += effectMemory[0]; // Move eye to next starting location
+      effectDelayStart = currentMilliSeconds;
+      break;
+
+    case 3: // move delay
+      if ((currentMilliSeconds - effectDelayStart) > SpeedDelay) {
+        effectState = 1;
+      }
+      break;
+
+    case 4: // move delay
+      if ((currentMilliSeconds - effectDelayStart) > ReturnDelay) {
+        effectState = 1;
+      }
+      break;
+      
+    default:
+      effectState = 0; // lost current state so restart effect
+      break;
   }
-
-  delay(ReturnDelay);
+//  for (int i = 0; i < (ledCount - EyeSize - 2); i++) {
+//    if (shouldAbortEffect()) {
+//      return;
+//    }
+//    setAll(0, 0, 0, 0, false);
+//    setPixel(i, red / 10, green / 10, blue / 10, white / 10, false);
+//    for (int j = 1; j <= EyeSize; j++) {
+//      setPixel(i + j, red, green, blue, white, false);
+//    }
+//    setPixel(i + EyeSize + 1, red / 10, green / 10, blue / 10, white / 10, false);
+//    showStrip();
+//    delay(SpeedDelay);
+//  }
+//
+//  delay(ReturnDelay);
+//
+//  for (int i = (ledCount - EyeSize - 2); i > 0; i--) {
+//    if (shouldAbortEffect()) {
+//      return;
+//    }
+//    setAll(0, 0, 0, 0, false);
+//    setPixel(i, red / 10, green / 10, blue / 10, white / 10, false);
+//    for (int j = 1; j <= EyeSize; j++) {
+//      setPixel(i + j, red, green, blue, white, false);
+//    }
+//    setPixel(i + EyeSize + 1, red / 10, green / 10, blue / 10, white / 10, false);
+//    showStrip();
+//    delay(SpeedDelay);
+//  }
+//
+//  delay(ReturnDelay);
 }
 
 void setPixelHeatColor (int Pixel, byte temperature) {
@@ -627,8 +683,8 @@ void ShowPixels() {
   if (pixelLen == 2) {
     //Serial.println(F("ShowPixels-Range"));
 
-    int startL = max(0,min(pixelArray[0],pixelArray[1])); // choose smaller of array entries
-    int endL = min(ledCount,max(pixelArray[0],pixelArray[1])); // choose larger of array entries
+    int startL = max(0, min(pixelArray[0], pixelArray[1])); // choose smaller of array entries
+    int endL = min(ledCount, max(pixelArray[0], pixelArray[1])); // choose larger of array entries
 
     for (int i = startL; i < endL; i++) {
       setPixel(i, red, green, blue, white, true);
@@ -640,7 +696,7 @@ void ShowPixels() {
 
     for (int i = 0; i < pixelLen; i++) {
       // constrain the pixel in the array to a valid pixel number in the strip
-      setPixel(constrain(pixelArray[i],0,ledCount), red, green, blue, white, true);
+      setPixel(constrain(pixelArray[i], 0, ledCount), red, green, blue, white, true);
     }
   }
   showStrip();

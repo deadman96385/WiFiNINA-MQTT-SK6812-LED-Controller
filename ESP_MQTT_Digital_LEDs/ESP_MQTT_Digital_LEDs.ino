@@ -89,6 +89,7 @@ bool transitionAbort = false;
 int transitionTime = 50; // 1-150
 int pixelLen = 1;
 int pixelArray[50];
+int effectParameter[4] = {0,0,0,0};
 
 int stripStart[NUMSTRIPS] = {
   0,    // strip 0 which is not used
@@ -177,10 +178,10 @@ bool setup_wifi() {
     if (!waitingForModule) {
       waitingForModule = true;
       wifiDelayStart = currentMilliSeconds;
-      Serial.println("Communication with WiFi module failed!");
+      Serial.println(F("Communication with WiFi module failed!"));
       return false;
     } else if ((currentMilliSeconds - wifiDelayStart) > tenSeconds) {
-      Serial.println("Communication with WiFi module failed! 10 second delay finished.");
+      Serial.println(F("Communication with WiFi module failed! 10 second delay finished."));
       wifiDelayStart = currentMilliSeconds;
       return false;
     }
@@ -204,7 +205,7 @@ bool setup_wifi() {
     } else if ((currentMilliSeconds - wifiDelayStart) > tenSeconds) {
       // 10 second timeout so attempt again
       wifiDelayStart = currentMilliSeconds;
-      Serial.print("Attempting again to connect to WPA SSID: ");
+      Serial.print(F("Attempting again to connect to WPA SSID: "));
       Serial.println(WIFI_SSID);
       // Connect to WPA/WPA2 network:
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -213,7 +214,7 @@ bool setup_wifi() {
   } else if (WiFi.status() != WL_CONNECTED) {
     waitingForConnect = true;
     wifiDelayStart = currentMilliSeconds;
-    Serial.print("Attempting to connect to WPA SSID: ");
+    Serial.print(F("Attempting to connect to WPA SSID: "));
     Serial.println(WIFI_SSID);
     // Connect to WPA/WPA2 network:
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -278,7 +279,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print(F("] "));
 
   char message[length + 1];
-  for (int i = 0; i < length; i++) {
+  for (unsigned int i = 0; i < length; i++) {
     message[i] = (char)payload[i];
   }
   message[length] = '\0';
@@ -339,7 +340,7 @@ bool processJson(char* message) {
   JsonObject& root = jsonBuffer.parseObject(message);
 
   if (!root.success()) {
-    Serial.println("parseObject() failed");
+    Serial.println(F("parseObject() failed"));
     return false;
   }
 
@@ -396,6 +397,19 @@ bool processJson(char* message) {
     effectString = root["effect"];
     effect = effectString;
     effectStart = true;
+  }
+
+  if (root.containsKey("parameter1")) {
+    effectParameter[0] = root["parameter1"];
+  }
+  if (root.containsKey("parameter2")) {
+    effectParameter[1] = root["parameter2"];
+  }
+  if (root.containsKey("parameter3")) {
+    effectParameter[2] = root["parameter3"];
+  }
+  if (root.containsKey("parameter4")) {
+    effectParameter[3] = root["parameter4"];
   }
 
   return true;
@@ -473,7 +487,7 @@ void loop() {
   static unsigned long msgDelayStart;
   static unsigned long effectDelayStart;
   currentMilliSeconds = millis();
-  if ((WiFi.status() != WL_CONNECTED) | !wifiSeen) {
+  if ((WiFi.status() != WL_CONNECTED) || !wifiSeen) {
     //    delay(1);
     wifiSeen = setup_wifi();
   }
@@ -516,7 +530,8 @@ void loop() {
         Twinkle(200, (2 * transitionTime), true);
       }
       if (effect == "cylon bounce") {
-        CylonBounce(4, transitionTime / 10, 50);
+//        CylonBounce(4, transitionTime / 10, 50);
+        CylonBounce(effectParameter[0], effectParameter[1], effectParameter[1]*10);
       }
       if (effect == "fire") {
         Fire(55, 120, (2 * transitionTime / 2));
