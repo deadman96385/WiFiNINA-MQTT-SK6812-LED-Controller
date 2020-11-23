@@ -9,17 +9,18 @@
       - WiFiNINA
       - Adafruit NeoPixel
       - PubSubClient
-      - ArduinoJSON V5.13.5
+      - ArduinoJSON
 */
 // ------------------------------
 // ---- all config in auth.h ----
 // ------------------------------
 
-// The maximum mqtt message size, including header, is 128 bytes by default.
-// You must update your PubSubClient.h file manually.......
+// The maximum mqtt message size, included via header, is 256 bytes by default.
 #define MQTT_MAX_PACKET_SIZE 1024
+#define MQTT_KEEPALIVE 60
+#define MQTT_SOCKET_TIMEOUT 60
 
-#include <ArduinoJson.h> //Not beta version. Tested with v5.13.5
+#include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <Adafruit_NeoPixel.h>
 #include <WiFiNINA.h>
@@ -29,7 +30,7 @@
 
 
 /****************************************FOR JSON***************************************/
-const int BUFFER_SIZE = JSON_OBJECT_SIZE(15);
+const int BUFFER_SIZE = JSON_OBJECT_SIZE(60);
 
 const char* birthMessage = "online";
 const char* lwtMessage = "offline";
@@ -52,7 +53,7 @@ byte red = 0;
 byte green = 0;
 byte blue = 0;
 byte white = 0;
-byte brightness = 255;
+int brightness = 255;
 
 Adafruit_NeoPixel pixelStrings[] = {
   Adafruit_NeoPixel(1, 0, NEO_GRBW),
@@ -167,9 +168,9 @@ int freeMemory() {
 void setup() {
 
   Serial.begin(115200);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
+  //  while (!Serial) {
+  //    ; // wait for serial port to connect. Needed for native USB port only
+  //  }
   Serial.println ();
   Serial.print (F("Initial Free memory = "));
   Serial.println (freeMemory ());
@@ -299,7 +300,9 @@ void setOn() {
 }
 
 /********************************** START CALLBACK*****************************************/
+
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
+
   Serial.println(F(""));
   Serial.print(F("Message arrived ["));
   Serial.print(topic);
@@ -309,15 +312,129 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   for (unsigned int i = 0; i < length; i++) {
     message[i] = (char)payload[i];
   }
+
   message[length] = '\0';
   Serial.println(message);
-  //Serial.println(topic);
+
+  const size_t capacity = BUFFER_SIZE + 60;
+  DynamicJsonDocument doc(capacity);
+  //  StaticJsonDocument<BUFFER_SIZE> doc;
+  auto error = deserializeJson(doc, payload, length);
+  JsonObject root = doc.as<JsonObject>(); // get the root object
+
+  if (error) {
+    Serial.print(F("deserializeJson() failed with code "));
+    Serial.println(error.c_str());
+    return;
+  }
+
+  const char* j_state = root["state"];
+  unsigned int j_transition = root["transition"];
+//  JsonObject j_color = root["color"];
+  unsigned int j_white_value = root["white_value"];
+  unsigned int j_brightness = root["brightness"];
+  const char* j_pixel = root["pixel"];
+  const char* j_effect = root["effect"];
+  unsigned int j_firstPixel = root["firstPixel"];
+  unsigned int j_lastPixel = root["lastPixel"];
+  unsigned int j_parameter1 = root["parameter1"];
+  unsigned int j_parameter2 = root["parameter2"];
+  unsigned int j_parameter3 = root["parameter3"];
+  unsigned int j_parameter4 = root["parameter4"];
+  Serial.print(F("First Pixel"));
+  Serial.println(F(""));
+  Serial.println(j_firstPixel);  
+  Serial.print(F("Last Pixel"));
+  Serial.println(F(""));
+  Serial.println(j_lastPixel);
+  Serial.print(F("Param 1"));
+  Serial.println(F(""));
+  Serial.println(j_parameter1);
 
   if (strcmp(topic, "led/led/set") == 0) {
     previousEffect = effect;
 
-    if (!processJson(message)) {
-      return;
+    if (j_state != nullptr) {
+      if (strcmp(root["state"], on_cmd) == 0) {
+        stateOn = true;
+        effectStart = true;
+      }
+      else if (strcmp(root["state"], off_cmd) == 0) {
+        stateOn = false;
+      }
+      else {
+        sendState();
+      }
+
+    }
+
+    if (j_transition != 0) {
+      transitionTime = root["transition"];
+    }
+
+    if (root.containsKey("color")) {
+      JsonObject color = root["color"];
+      realRed = color["r"]; // 255
+      realGreen = color["g"]; // 0
+      realBlue = color["b"]; // 0
+      realWhite = 0;
+      Serial.println(realRed);
+      Serial.println(realGreen);
+      Serial.println(realBlue);
+    }
+
+    if (j_white_value != 0) {
+      // To prevent our power supply from having a cow. Only RGB OR White
+      // Disabled because defaulting to it limits the total brightness if someone has a good power supply
+      //    realRed = 0;
+      //    realGreen = 0;
+      //    realBlue = 0;
+      realWhite = doc["white_value"];
+    }
+
+    if (j_brightness != 0) {
+      brightness = doc["brightness"];
+    }
+
+    if (j_pixel != nullptr) {
+      pixelLen = doc["pixel"].size();
+      if (pixelLen > sizeof(pixelArray)) {
+        pixelLen = sizeof(pixelArray);
+      }
+      for (int i = 0; i < pixelLen; i++) {
+        pixelArray[i] = doc["pixel"][i];
+      }
+      effectStart = true;
+    }
+
+    if (j_effect != nullptr) {
+      effectString = root["effect"];
+      effect = effectString;
+      effectStart = true;
+    }
+
+    if (j_firstPixel != 0) {
+      firstPixel = doc["firstPixel"];
+    }
+
+    if (j_lastPixel != 0) {
+      lastPixel = doc["lastPixel"];
+    }
+
+    if (j_parameter1 != 0) {
+      effectParameter[0] = doc["parameter1"];
+    }
+
+    if (j_parameter2 != 0) {
+      effectParameter[1] = doc["parameter2"];
+    }
+
+    if (j_parameter3 != 0) {
+      effectParameter[2] = doc["parameter3"];
+    }
+
+    if (j_parameter4 != 0) {
+      effectParameter[3] = doc["parameter4"];
     }
 
     previousRed = red;
@@ -337,8 +454,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       white = 0;
     }
 
-    Serial.println(effect);
-
     transitionAbort = true; // Kill the current effect
     transitionDone = false; // Start a new transition
 
@@ -350,123 +465,31 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     sendState();
   }
-}
 
-
-/********************************** START PROCESS JSON*****************************************/
-bool processJson(char* message) {
-  StaticJsonBuffer<BUFFER_SIZE> jsonBuffer;
-
-  JsonObject& root = jsonBuffer.parseObject(message);
-
-  if (!root.success()) {
-    Serial.println(F("parseObject() failed"));
-    return false;
-  }
-
-  if (root.containsKey("state")) {
-    if (strcmp(root["state"], on_cmd) == 0) {
-      stateOn = true;
-      effectStart = true;
-    }
-    else if (strcmp(root["state"], off_cmd) == 0) {
-      stateOn = false;
-    }
-    else {
-      sendState();
-      return false;
-    }
-  }
-
-  if (root.containsKey("transition")) {
-    transitionTime = root["transition"];
-  }
-
-  if (root.containsKey("color")) {
-    realRed = root["color"]["r"];
-    realGreen = root["color"]["g"];
-    realBlue = root["color"]["b"];
-    realWhite = 0;
-  }
-
-  // To prevent our power supply from having a cow. Only RGB OR White
-  // Disabled because defaulting to it limits the total brightness if someone has a good power supply
-  if (root.containsKey("white_value")) {
-    //    realRed = 0;
-    //    realGreen = 0;
-    //    realBlue = 0;
-    realWhite = root["white_value"];
-  }
-
-  if (root.containsKey("brightness")) {
-    brightness = root["brightness"];
-  }
-
-  if (root.containsKey("pixel")) {
-    pixelLen = root["pixel"].size();
-    if (pixelLen > sizeof(pixelArray)) {
-      pixelLen = sizeof(pixelArray);
-    }
-    for (int i = 0; i < pixelLen; i++) {
-      pixelArray[i] = root["pixel"][i];
-    }
-    effectStart = true;
-  }
-
-  if (root.containsKey("effect")) {
-    effectString = root["effect"];
-    effect = effectString;
-    effectStart = true;
-  }
-
-  if (root.containsKey("firstPixel")) {
-    firstPixel = root["firstPixel"];
-  }
-
-  if (root.containsKey("lastPixel")) {
-    lastPixel = root["lastPixel"];
-  }
-
-  if (root.containsKey("parameter1")) {
-    effectParameter[0] = root["parameter1"];
-  }
-  if (root.containsKey("parameter2")) {
-    effectParameter[1] = root["parameter2"];
-  }
-  if (root.containsKey("parameter3")) {
-    effectParameter[2] = root["parameter3"];
-  }
-  if (root.containsKey("parameter4")) {
-    effectParameter[3] = root["parameter4"];
-  }
-
-  return true;
 }
 
 
 /********************************** START SEND STATE*****************************************/
 void sendState() {
-  StaticJsonBuffer<BUFFER_SIZE> jsonBuffer;
-
-  JsonObject& root = jsonBuffer.createObject();
-
-  root["state"] = (stateOn) ? on_cmd : off_cmd;
-  JsonObject& color = root.createNestedObject("color");
+  StaticJsonDocument<BUFFER_SIZE> statedoc;
+  statedoc["state"] = (stateOn) ? on_cmd : off_cmd;
+  JsonObject color = statedoc.createNestedObject();
   color["r"] = realRed;
   color["g"] = realGreen;
   color["b"] = realBlue;
 
-  root["white_value"] = realWhite;
-  root["brightness"] = brightness;
-  root["transition"] = transitionTime;
-  root["effect"] = effect.c_str();
+  statedoc["white_value"] = realWhite;
+  statedoc["brightness"] = brightness;
+  statedoc["transition"] = transitionTime;
+  statedoc["effect"] = effect.c_str();
 
-  char buffer[root.measureLength() + 1];
-  root.printTo(buffer, sizeof(buffer));
+  //  char buffer[measureJson(statedoc) + 1];
+  char buffer[256];
+  size_t payload = serializeJson(statedoc, buffer);
 
   char combinedArray[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName)];
   sprintf(combinedArray, "%s%s", MQTT_STATE_TOPIC_PREFIX, deviceName); // with word space
-  if (!client.publish(combinedArray, buffer, true)) {
+  if (!client.publish(combinedArray, buffer, payload)) {
     Serial.println(F("Failed to publish to MQTT. Check you updated your MQTT_MAX_PACKET_SIZE"));
   }
 }
