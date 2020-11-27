@@ -140,11 +140,13 @@ bool strip_dirty[NUMSTRIPS];
 WiFiClient net;
 PubSubClient client(net);
 
-Adafruit_NeoPixel Strip;
-
+// Adafruit_NeoPixel Strip;
 
 
 #include "NeoPixel_Effects.h"
+
+#define effectQueueSize 50
+effectData effectQueue[effectQueueSize];
 
 #ifdef __arm__
 // should use uinstd.h to define sbrk but Due causes a conflict
@@ -167,6 +169,7 @@ int freeMemory() {
 /********************************** START SETUP*****************************************/
 void setup() {
 
+  unsigned int i, j;
   Serial.begin(115200);
   //  while (!Serial) {
   //    ; // wait for serial port to connect. Needed for native USB port only
@@ -174,12 +177,17 @@ void setup() {
   Serial.println ();
   Serial.print (F("Initial Free memory = "));
   Serial.println (freeMemory ());
+  // if analog input pin 0 is unconnected, random analog
+  // noise will cause the call to randomSeed() to generate
+  // different seed numbers each time the sketch runs.
+  // randomSeed() will then shuffle the random function.
+  randomSeed(analogRead(0));
 
   // Turn on power supply for LED strips. Controller runs on standby power from power supply
   pinMode(10, OUTPUT);
   digitalWrite(10, HIGH);
 
-  for (unsigned int i = 0; i < NUMSTRIPS; i++)
+  for (i = 0; i < NUMSTRIPS; i++)
   {
     // End of trinket special code
     pixelStrings[i].setBrightness(maxBrightness);
@@ -187,7 +195,26 @@ void setup() {
     pixelStrings[i].show(); // Initialize all pixels to 'off'
     strip_dirty[i] = false;
   }
-
+  // Initialize the effect queue
+  for (i=0; i < effectQueueSize; ++i) {
+    effectQueue[i].slotActive = false; // indicate slot is unused
+    effectQueue[i].effectPtr = NULL;
+    effectQueue[i].firstPixel = 0;  // first pixel involved in effect
+    effectQueue[i].lastPixel = 0;   // last pixel involved in effect
+    effectQueue[i].effectDelay = 0; // When effect wants time again
+    effectQueue[i].r = 0;           // What color effect should use if selectable
+    effectQueue[i].g = 0;           // What color effect should use if selectable
+    effectQueue[i].b = 0;;          // What color effect should use if selectable
+    effectQueue[i].w = 0;;          // What color effect should use if selectable
+    for (j=0; j < 5; ++j) effectQueue[i].effectVar[j] = 0;// 5 integers to play with before having to allocate memory
+    effectQueue[i].effectMemory = NULL; // receiver of pointer from memory allocation
+    for (j=0; j < 4; ++j) {
+      effectQueue[i].intParam[j] = 0;  // defined per effect
+    }
+    effectQueue[i].applyBrightness = false;
+    effectQueue[i].effectState = 0;  // State 0 is alway init, allocate memory, set defaults
+  }
+  
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setCallback(mqttCallback);
   Serial.println(F("Ready"));
@@ -526,6 +553,10 @@ void attemptReconnect() {
   //  }
 }
 
+// see if one pixel is between or overlaps 2 other pixels
+bool insideRange (unsigned int check, unsigned int first, unsigned int last) {
+  return ((first <= check) && (check <= last));
+}
 
 /********************************** START MAIN LOOP *****************************************/
 void loop() {
@@ -533,6 +564,8 @@ void loop() {
   static unsigned long msgDelayStart;
   static unsigned long effectDelayStart;
   currentMilliSeconds = millis();
+  unsigned int i, j;
+  
   if ((WiFi.status() != WL_CONNECTED) || !wifiSeen) {
     //    delay(1);
     wifiSeen = setup_wifi();
@@ -550,7 +583,82 @@ void loop() {
 
     //ArduinoOTA.poll();
   }
-
+  
+  if (effectStart) {
+    for (i=0; i < effectQueueSize; ++i) {
+      if (effectQueue[i].slotActive) {
+        // See if new effect overlaps any running effects. If so terminate them gracefully.
+        if (insideRange (firstPixel, effectQueue[i].firstPixel, effectQueue[i].lastPixel) ||
+           insideRange (lastPixel, effectQueue[i].firstPixel, effectQueue[i].lastPixel) ||
+           insideRange (effectQueue[i].firstPixel,firstPixel, lastPixel) ||
+           insideRange (effectQueue[i].lastPixel, firstPixel, lastPixel) ) 
+        {
+             bool finished;
+          // It overlaps so terminate it.
+          effectQueue[i].effectState = 1; // request termination
+          finished = effectQueue[i].effectPtr(effectQueue[i]); // give effect an itteration to cleanup and finish
+          effectQueue[i].slotActive = false; // Free up slot.
+        }
+      }
+    }
+    for (i=0; i < effectQueueSize; ++i) {
+      if (effectQueue[i].slotActive == false) { // find a slot to put new effect in
+        effectQueue[i].slotActive = true; // indicate slot is used
+        effectQueue[i].firstPixel = firstPixel;   // first pixel involved in effect
+        effectQueue[i].lastPixel  = lastPixel;    // last pixel involved in effect
+        effectQueue[i].r = realRed;            // What color effect should use if selectable
+        effectQueue[i].g = realGreen;            // What color effect should use if selectable
+        effectQueue[i].b = realBlue;            // What color effect should use if selectable
+        effectQueue[i].w = realWhite;            // What color effect should use if selectable
+        for (j=0; j < 4; ++j) {;
+          effectQueue[i].intParam[j] = effectParameter[i];  // defined per effect
+        }
+        effectQueue[i].applyBrightness = false;
+        effectQueue[i].effectState = 0;  // State 0 is alway init, allocate memory, set defaults
+        effectQueue[i].effectPtr = NULL;
+        if (effect == "clear")          effectQueue[i].effectPtr = ClearEffect;
+        if (effect == "solid")          effectQueue[i].effectPtr = SolidEffect;
+        if (effect == "twinkle")        effectQueue[i].effectPtr = TwinkleEffect;
+        if (effect == "cylon bounce")   effectQueue[i].effectPtr = CylonBounceEffect;
+        if (effect == "fire")           effectQueue[i].effectPtr = FireEffect;
+        if (effect == "fade in out")    effectQueue[i].effectPtr = FadeInOutEffect;
+        if (effect == "strobe")         effectQueue[i].effectPtr = StrobeEffect;
+        if (effect == "theater chase")  effectQueue[i].effectPtr = TheaterChaseEffect;
+        if (effect == "rainbow cycle")  effectQueue[i].effectPtr = RainbowCycleEffect;
+        if (effect == "color wipe")     effectQueue[i].effectPtr = ColorWipeEffect;
+        if (effect == "running lights") effectQueue[i].effectPtr = RunningLightsEffect;
+        if (effect == "snow sparkle")   effectQueue[i].effectPtr = SnowSparkleEffect;
+        if (effect == "sparkle")        effectQueue[i].effectPtr = SparkleEffect;
+        if (effect == "twinkle random") effectQueue[i].effectPtr = SetOnePixelEffect;
+        if (effect == "bouncing balls") effectQueue[i].effectPtr = NoEffect;
+        if (effect == "lightning")      effectQueue[i].effectPtr = NoEffect;
+        break;
+      }
+    }
+    effectStart = false;
+  }
+  
+  // Give all running effects in queue an itteration
+  for (i=0; i < effectQueueSize; ++i) {
+    if (effectQueue[i].slotActive && !effectQueue[i].isOverlay) {
+      bool effectFinished;
+      effectFinished = effectQueue[i].effectPtr(effectQueue[i]); // give 1 itteration to effect
+      if (effectFinished) { // If true effect is done so free up slot
+        effectQueue[i].slotActive = false; // indicate slot is used
+       }
+    }
+  }
+   for (i=0; i < effectQueueSize; ++i) {
+    if (effectQueue[i].slotActive && effectQueue[i].isOverlay) {
+      bool effectFinished;
+      effectFinished = effectQueue[i].effectPtr(effectQueue[i]); // give 1 itteration to effect
+      if (effectFinished) { // If true effect is done so free up slot
+        effectQueue[i].slotActive = false; // indicate slot is used
+       }
+    }
+  } showStrip();
+       
+/*
   // This var will go away when all effects are state machine based
   transitionAbort = false; // Because we came from the loop and not 1/2 way though a transition
 
@@ -670,4 +778,5 @@ void loop() {
     //    delay(600); // Save some power? (from 0.9w to 0.4w when off with ESP8266)
   }
   effectStart = false;
+  */
 }

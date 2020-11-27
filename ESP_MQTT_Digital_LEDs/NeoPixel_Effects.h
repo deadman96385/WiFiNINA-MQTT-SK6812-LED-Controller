@@ -1,15 +1,39 @@
 #ifndef _NEOPIXEL_EFFECTS
 #define _NEOPIXEL_EFFECTS
 
+// Struct to hold all data about an effect. Each effect routine will pull parameters from a pased reference
+// to the structure. One filed effect_mem is a pointer to which malloced memory can be attached if larger arrays
+// are needed.
+
+typedef struct effectData{
+  bool slotActive;           // Does this slot in the queue have an active effect in it?
+  bool isOverlay;            // Does this effect expect to appear infront of other effects?
+  bool (*effectPtr)(effectData&); // used by management to remember which effect owns this data
+  unsigned int firstPixel;   // first pixel involved in effect
+  unsigned int lastPixel;    // last pixel involved in effect
+  unsigned int effectDelay;  // Allow effect to have 2 delay times to compare against
+  byte         r;            // What color effect should use if selectable
+  byte         g;            // What color effect should use if selectable
+  byte         b;            // What color effect should use if selectable
+  byte         w;            // What color effect should use if selectable
+  int          effectVar[5]; // 5 integers for effect to play with before having to allocate memory
+  void *       effectMemory; // receiver of pointer from memory allocation
+  int          intParam[4];  // defined per effect
+  bool         applyBrightness;
+  unsigned int effectState;  // State 0 is alway init, allocate memory, set defaults
+  // State 1 is always end, release memory if allocated
+  // States 2+ defined per effect
+} effectData;
+
 ///**************************** START EFFECTS *****************************************/
 // Effects from: https://www.tweaking4all.com/hardware/arduino/adruino-led-strip-effects/
 
 // This function's need will go away as effects are transformed into state machines rather then loops.
-bool shouldAbortEffect() {
-  yield(); // Watchdog timer
-  client.loop(); // Update from MQTT
-  return transitionAbort;
-}
+//bool shouldAbortEffect() {
+//  yield(); // Watchdog timer
+//  client.loop(); // Update from MQTT
+//  return transitionAbort;
+//}
 
 void showDirty() { // Send updated data to all led strips that need updates
   for (int i = 0; i < NUMSTRIPS; i++) {
@@ -27,6 +51,16 @@ void showStrip() {
   showDirty();
 }
 
+/*!
+   @brief   Set virtual pixel to given color.
+   @param   pixel which pixel across entire virtual strip to set (uint)
+   @param   r red colors value (byte)
+   @param   g green colors value (byte)
+   @param   b blue colors value (byte)
+   @param   w white colors value (byte)
+   @param   applyBrightness (bool) should global brightnes effect pixel
+   @return  void
+*/
 void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
   if (!stateOn) {
     return;
@@ -39,29 +73,30 @@ void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrig
     w = map(w, 0, 255, 0, brightness);
   }
 
-  int StripNumber = 0;
-  int LedNumber = 0;
+  int stripNumber = 0;
+  int ledNumber = 0;
 
   // Find the correct strip to work with out of virtual all led strip
   for (int i = 0; i < NUMSTRIPS; i++) {
     if ((pixel >= stripStart[i]) && (pixel <= stripEnd[i])) {
-      StripNumber = i;
+      stripNumber = i;
       break; // found strip so don't check rest
     }
   }
 
   // Find the correct LED in the selected strip
-  if (stripReversed[StripNumber]) { // is strip reversed?
-    LedNumber = stripEnd[StripNumber] - pixel; // offset from end
+  if (stripReversed[stripNumber]) { // is strip reversed?
+    ledNumber = stripEnd[stripNumber] - pixel; // offset from end
   } else {
-    LedNumber = pixel - stripStart[StripNumber]; // offset from start
+    ledNumber = pixel - stripStart[stripNumber]; // offset from start
   }
+  ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
 
   // Note the strip is dirty because we set a value in it and updating is needed
-  strip_dirty[StripNumber] = true;
+  strip_dirty[stripNumber] = true;
 
   // Actually set the pixel in the strip
-  pixelStrings[StripNumber].setPixelColor(LedNumber, r, g, b, w); // faster to not build packed color word
+  pixelStrings[stripNumber].setPixelColor(ledNumber, r, g, b, w); // faster to not build packed color word
 }
 
 void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
@@ -75,16 +110,6 @@ void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
 
   if (refreshStrip) {
     showDirty();
-
-    //Serial.print(F("Setting all LEDs - ");
-    //Serial.print(F("r: "));
-    //Serial.print(r);
-    //Serial.print(F(", g: "));
-    //Serial.print(g);
-    //Serial.print(F(", b: "));
-    //Serial.print(b);
-    //Serial.print(F(", w: "));
-    //Serial.println(w);
   }
 }
 
@@ -104,12 +129,197 @@ void FillPixels(unsigned int firstPixel, unsigned int lastPixel, byte r, byte g,
   }
 }
 
-void zeroEffectMemory () {
-  for (int i = 0; i < effectMemoryLen; i++) {
-    effectMemory[i] = 0;
+/*
+// Example effect. Should return true if effect has finished, false if effect wants more itterations
+bool SampleEffect (effectData &myData) {
+  // intParam[0] is delay between blinking // always use [0] for delay setting
+  // intParam[1] is how many leds to blink on
+  bool returnValue = false;
+  byte * effectMemory = (byte *)myData.effectMemory; // cast void pointer to correct type
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = 1; // for example this is an itteration count
+      // grab a byte of memory for each led to be modified
+      myData.effectMemory = (void *)malloc((myData.lastPixel - myData.firstPixel + 1) * sizeof(byte));
+      effectMemory = (byte *)myData.effectMemory; // update since we just allocated memory
+      myData.effectState = 2; // display effect
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      if (myData.effectMemory == NULL) {
+        returnValue = true; // no memory to do effect
+      }
+      break;
+
+    case 2: // Display data
+      if (myData.effectVar[0] < myData.intParam[1]) {
+        myData.effectVar[0] = constrain(myData.effectVar[0], myData.firstPixel, myData.lastPixel);
+        setPixel( myData.effectVar[0], myData.r, myData.g, myData.b, myData.w, myData.applyBrightness);
+        setPixel( myData.effectVar[0], 0, 0, 0, 0, myData.applyBrightness);
+        ++myData.effectVar[0];
+        myData.effectState = 3; // delay
+        myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      } else {
+        myData.effectState = 1; // Effect has finished.
+      }
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      if (myData.effectMemory != NULL) {
+        free(myData.effectMemory);
+      }
+      returnValue = true;
   }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+*/
+
+// NoEffect effect. Should return true if effect has finished, false if effect wants more itterations
+bool NoEffect (effectData &myData) {
+  // Do nothing and finish right away.
+  return true;  // true if effect is finished. False for more itterations.
 }
 
+// clear effect. Should return true if effect has finished, false if effect wants more itterations
+bool ClearEffect (effectData &myData) {
+  FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+  return true;
+}
+
+// Solid effect. Should return true if effect has finished, false if effect wants more itterations
+bool SolidEffect (effectData &myData) {
+  FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
+  return true; // true if effect is finished. False for more itterations.
+}
+
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool TwinkleEffect (effectData &myData) {
+  // intParam[0] is delay between blinking
+  // intParam[1] is how many pixels to have twinkling at the same time
+  // intParam[2] is background white brightness
+  bool returnValue = false;
+  unsigned int i, j;
+  unsigned int *effectMemory = (unsigned int *)myData.effectMemory;
+  byte backgroundWhite = myData.intParam[2];
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = 0; // Which twinkle pixel to change next
+      myData.effectVar[1] = myData.lastPixel - myData.firstPixel + 1; // length of pixels to twinkle over
+      // grab some memory for each pixel to be twinkled
+      myData.effectMemory = (void *)malloc(myData.intParam[1] * sizeof(unsigned int));
+      effectMemory = (unsigned int *)myData.effectMemory;
+      if (myData.effectMemory == NULL) {
+        returnValue = true; // no memory to do effect so abort
+        break;
+      }
+      // erase zone we are to twinkle in
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, backgroundWhite, false);
+
+      for (i = 0; i < myData.intParam[1]; ++i) {
+        j = random(myData.effectVar[1] - 1);
+        effectMemory[i] = j; // build initial list of twinkles and light them
+        setPixel (j + myData.firstPixel, myData.r, myData.g, myData.b, myData.w, myData.applyBrightness);
+      }
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      myData.effectState = 3; // delay
+      break;
+
+    case 2: // Display next twinkle
+      i = myData.effectVar[0]; // grab pixel index to change;
+      j = effectMemory[i]; // grab location of pixel on strip
+      setPixel (j + myData.firstPixel, 0, 0, 0, 0, myData.applyBrightness); // Turn off current twinkle
+      j = random(myData.effectVar[1] - 1);
+      setPixel (j + myData.firstPixel, myData.r, myData.g, myData.b, myData.w, myData.applyBrightness);
+      effectMemory[i] = j; // store new twinkle location
+      i = (i + 1) % myData.intParam[1]; // advance to next pixel looping back to zero when needed
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      if (myData.effectMemory != NULL) {
+        for (i = 0; i < myData.intParam[1]; ++i) {
+          j = effectMemory[i]; // grab location of pixel on strip
+          setPixel (j + myData.firstPixel, 0, 0, 0, 0, myData.applyBrightness); // Turn off current twinkle
+        }
+        free(myData.effectMemory);
+      }
+      returnValue = true;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool TwinkleRandomEffect (effectData &myData) {
+  // intParam[0] is delay between blinking
+  // intParam[1] is how many pixels to have twinkling at the same time
+  // intParam[2] is background white brightness
+  bool returnValue = false;
+  unsigned int i, j;
+  unsigned int *effectMemory = (unsigned int *)myData.effectMemory;
+  byte backgroundWhite = myData.intParam[2];
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = 0; // Which twinkle pixel to change next
+      myData.effectVar[1] = myData.lastPixel - myData.firstPixel + 1; // length of pixels to twinkle over
+      // grab some memory for each pixel to be twinkled
+      myData.effectMemory = (void *)malloc(myData.intParam[1] * sizeof(unsigned int));
+      effectMemory = (unsigned int *)myData.effectMemory;
+      if (myData.effectMemory == NULL) {
+        returnValue = true; // no memory to do effect so abort
+        break;
+      }
+      // erase zone we are to twinkle in
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, backgroundWhite, false);
+
+      for (i = 0; i < myData.intParam[1]; ++i) {
+        j = random(myData.effectVar[1] - 1);
+        effectMemory[i] = j; // build initial list of twinkles and light them
+        setPixel (j + myData.firstPixel, random(0,256), random(0,256), random(0,256), 0, myData.applyBrightness);
+      }
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      myData.effectState = 3; // delay
+      break;
+
+    case 2: // Display next twinkle
+      i = myData.effectVar[0]; // grab pixel index to change;
+      j = effectMemory[i]; // grab location of pixel on strip
+      setPixel (j + myData.firstPixel, 0, 0, 0, backgroundWhite, myData.applyBrightness); // Turn off current twinkle
+      j = random(myData.effectVar[1] - 1);
+      setPixel (j + myData.firstPixel, random(0,256), random(0,256), random(0,256), 0, myData.applyBrightness);
+      effectMemory[i] = j; // store new twinkle location
+      i = (i + 1) % myData.intParam[1]; // advance to next pixel looping back to zero when needed
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      if (myData.effectMemory != NULL) {
+        for (i = 0; i < myData.intParam[1]; ++i) {
+          j = effectMemory[i]; // grab location of pixel on strip
+          setPixel (j + myData.firstPixel, 0, 0, 0, 0, myData.applyBrightness); // Turn off current twinkle
+        }
+        free(myData.effectMemory);
+      }
+      returnValue = true;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+
+/*
 // Twinkle(10, 100, false);
 void Twinkle(unsigned int Count, unsigned int SpeedDelay, boolean OnlyOne) {
   if (effectStart) {
@@ -151,7 +361,80 @@ void Twinkle(unsigned int Count, unsigned int SpeedDelay, boolean OnlyOne) {
       break;
   }
 }
+*/
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool SetOnePixelEffect (effectData &myData) {
+  // Just turn on the firstPixel and finish
+  setPixel(myData.firstPixel, myData.r, myData.g, myData.b, myData.w, false);
+  return true; // true if effect is finished. False for more itterations.
+}
 
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool CylonBounceEffect (effectData &myData) {
+  // intParam[0] is delay for moving eye
+  // intParam[1] is center of eye pixel count
+  // intParam[2] is edge of eye pixel count (1 or 2 are good)
+  // intParam[3] is delay for eye to pause for at each end
+  bool returnValue = false;
+  unsigned int eyeLeftEdge;
+  unsigned int eyeLeftCore;
+  unsigned int eyeRightCore;
+  unsigned int eyeRightEdge;
+  switch (myData.effectState) {
+    case 0: // init or startup
+      // check if eye fits in pixel range to bounce in
+      if ((myData.lastPixel - myData.firstPixel + 1) > (myData.intParam[2] * 2 + myData.intParam[1])) {
+        myData.effectVar[0] = 1; // Direction of eye movement (-1 or 1)
+        myData.effectVar[1] = myData.firstPixel; // Starting pixel of eye
+        myData.effectState = 2;
+        // erase zone we are to bounce in
+        FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      } else {
+        // flash to indicate error and then indicate finished.
+        myData.effectState = 1;
+        returnValue = true;
+        FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 255, true);
+        FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, true);
+      }
+      break;
+
+    case 2: {// Display eye
+        eyeLeftEdge = myData.effectVar[1];
+        eyeLeftCore = eyeLeftEdge + myData.intParam[2];
+        eyeRightCore = eyeLeftCore + myData.intParam[1];
+        eyeRightEdge = eyeRightCore + myData.intParam[2];
+        FillPixels(eyeLeftEdge, eyeLeftCore - 1, myData.r / 5, myData.g / 5, myData.b / 5, myData.w / 5, false); // dim
+        FillPixels(eyeLeftCore, eyeRightCore, myData.r, myData.g, myData.b, myData.w, false);  // bright
+        FillPixels(eyeRightCore + 1, eyeRightEdge, myData.r / 5, myData.g / 5, myData.b / 5, myData.w / 5, false); // dim
+        showStrip();
+        FillPixels(eyeLeftEdge, eyeRightEdge, 0, 0, 0, 0, false);
+        if (eyeRightEdge >= myData.lastPixel) { // have we hit right edge?
+          myData.effectVar[0] = -1;
+          myData.effectDelay = currentMilliSeconds + myData.intParam[3]; // pause at end
+        } else if (eyeLeftEdge == 0) { // have we hit left edge?
+          myData.effectVar[0] = 1;
+          myData.effectDelay = currentMilliSeconds + myData.intParam[3]; // pause at end
+        } else {
+          myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause in middle
+        }
+        myData.effectVar[1] += myData.effectVar[0]; // move eye start to next pixel
+        myData.effectState = 3; // delay
+      }
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      FillPixels(myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+/*
 // CylonBounce(4, 10, 50);
 void CylonBounce(int EyeSize, int SpeedDelay, int ReturnDelay) {
   if (effectStart) {
@@ -242,7 +525,88 @@ void CylonBounce(int EyeSize, int SpeedDelay, int ReturnDelay) {
   //
   //  delay(ReturnDelay);
 }
+*/
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool FireEffect (effectData &myData) {
+  // intParam[0] is delay between updates
+  // intParam[1] is cooling rate
+  // intParam[2] is sparking rate
+  // intParam[3] is background white value
+  bool returnValue = false;
+  byte *heat = (byte *)myData.effectMemory;
+  unsigned int cooldown;
+  unsigned int i, j;
+  unsigned int pixelCount = myData.lastPixel - myData.firstPixel + 1;
+  switch (myData.effectState) {
+    case 0: // init or startup
+      // grab some memory for each led to be modified
+      myData.effectMemory = (void *)malloc(pixelCount * sizeof(byte));
+      heat = (byte *)myData.effectMemory; // update since memory was just allocated
+      if (myData.effectMemory == NULL) {
+        returnValue = true; // no memory to do effect so abort
+        break;
+      }
+      // erase zone we are to fire in
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      break;
 
+    case 2: // Display next fire
+      // Step 1.  Cool down every cell a little
+      for ( i = 0; i < pixelCount; i++) {
+        cooldown = random(0, ((myData.intParam[1] * 10) / pixelCount) + 2);
+
+        if (cooldown > heat[i]) {
+          heat[i] = 0;
+        } else {
+          heat[i] -= cooldown;
+        }
+      }
+
+      // Step 2.  Heat from each cell drifts 'up' and diffuses a little
+      for ( i = pixelCount - 1; i >= 2; i--) {
+        heat[i] = (heat[i - 1] + heat[i - 2] + heat[i - 2]) / 3;
+      }
+
+      // Step 3.  Randomly ignite new 'sparks'
+      for (i = 0; i <= pixelCount % 200; i++) {
+        if ( random(255) < myData.intParam[2] ) { //sparking
+          j = random(7) + 200 * i; // a random start spark for every block of 200 pixels
+          heat[j] += random(160, 255); // add heat to existing ember
+        }
+      }
+
+      // Step 4.  Convert heat to LED colors and display
+      // heat is a byte, heat * 3 will overflow twice for large values and that is desired.
+      // This results in 3 linear ramps from 0 to 255.
+      for ( i = 0; i < ledCount; i++) {
+        // figure out which third of the spectrum we're in
+        if (heat[i] > 170) {  // hottest
+          setPixel(i + myData.firstPixel, 255, 255, heat[i] * 3, myData.intParam[3], true); // hottest
+        } else if (heat[i] > 85) {  // middle
+          setPixel(i + myData.firstPixel, 255, heat[i] * 3, 0, myData.intParam[3], true); // middle
+        } else {
+          setPixel(i + myData.firstPixel, heat[i] * 3, 0, 0, myData.intParam[3], true); // coolest
+        }
+      }
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      if (myData.effectMemory != NULL) {
+        free(myData.effectMemory);
+      }
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+/*
 void setPixelHeatColor (int Pixel, byte temperature) {
   // Scale 'heat' down from 0-255 to 0-191
   byte t192 = round((temperature / 255.0) * 191);
@@ -296,7 +660,54 @@ void Fire(int Cooling, int Sparking, int SpeedDelay) {
   showStrip();
   delay(SpeedDelay);
 }
+*/
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool FadeInOutEffect (effectData &myData) {
+  // intParam[0] is delay between fade steps
+  // intParam[1] is fade step size
+  bool returnValue = false;
+  byte r, g, b, w;
+  switch (myData.effectState) {
+    case 0: // init or startup
+      if (myData.intParam[1] == 0) myData.intParam[1] = 1; // make sure there is some fading to do
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      myData.effectVar[0] = 1; //step increment 1 or -1 for direction of fade
+      myData.effectVar[1] = 0; // Current level of fade
+      myData.effectState = 2;
+      break;
 
+    case 2: {// Display next level of fade
+        // Move to nexst level of fade
+        myData.effectVar[1] = constrain (myData.effectVar[1] + myData.effectVar[0] * myData.intParam[1], 0, 255);
+        // Reverse direction if fade level has maxed out
+        if (myData.effectVar[1] == 255) {
+          myData.effectVar[0] = -1;
+        } else if (myData.effectVar[1] == 0) {
+          myData.effectVar[0] = 1;
+        }      // map (value, fromLow, fromHigh, toLow, toHigh)
+        r = map(red,   0, 255, 0, myData.effectVar[1]);
+        g = map(green, 0, 255, 0, myData.effectVar[1]);
+        b = map(blue,  0, 255, 0, myData.effectVar[1]);
+        w = map(white, 0, 255, 0, myData.effectVar[1]);
+        FillPixels(myData.firstPixel, myData.lastPixel, r, g, b, w, false);
+        myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause at end
+        myData.effectState = 3; // delay
+      }
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      FillPixels(myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+/*
 // FadeInOut();
 void FadeInOut() {
   byte r, g, b, w;
@@ -311,7 +722,7 @@ void FadeInOut() {
       effectMemory[1] = 0; // current fade level
       setAll(0, 0, 0, 0, false);
       effectState = 1; // Display fade
-//      break;
+    //      break;
 
     case 1: // display fade
       // map (value, fromLow, fromHigh, toLow, toHigh)
@@ -367,16 +778,64 @@ void FadeInOut() {
   //    showStrip();
   //  }
 }
+*/
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool StrobeEffect (effectData &myData) {
+  // intParam[0] is delay for how long strobe is on
+  // intParam[1] is delay for how long strobe is off
+  // intParam[2] is number of strobe pulses to do
+  bool returnValue = false;
+  switch (myData.effectState) {
+    case 0: // init or startup
+      if (myData.intParam[2] == 0) myData.intParam[2] = 1; // make sure there is some strobing to do
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      myData.effectVar[0] = 0; //strobe on count
+      myData.effectVar[1] = 0; // 1=strobe on, 0=strobe is off
+      myData.effectState = 2; // display
+      break;
 
+    case 2: // Display next strobe or unstrobe cycle
+      if (myData.effectVar[1] == 0) { // strobe is off so turn on
+        myData.effectVar[1] = 1;
+        FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
+        ++myData.effectVar[0];
+        myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause for on time
+        myData.effectState = 3; // delay
+      } else {
+        // strobe is on so turn off and check if finished strobing
+        if (myData.effectVar[0] < myData.intParam[2]) { // more strobes to do
+          myData.effectVar[1] = 0;
+          FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+          myData.effectDelay = currentMilliSeconds + myData.intParam[1]; // pause for off time
+          myData.effectState = 3; // delay
+        } else {
+          myData.effectState = 1; // Done which turns off pixels and returns
+        }
+      }
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      FillPixels(myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+/*
 // Slower:
 // Strobe(10, 100);
 // Fast:
 // Strobe(10, 50);
 void Strobe(int StrobeCount, int FlashDelay) {
   for (int j = 0; j < StrobeCount; j++) {
-    if (shouldAbortEffect()) {
-      return;
-    }
+    //    if (shouldAbortEffect()) {
+    //      return;
+    //    }
     setAll(red, green, blue, white);
     showStrip();
     delay(FlashDelay);
@@ -385,13 +844,67 @@ void Strobe(int StrobeCount, int FlashDelay) {
     delay(FlashDelay);
   }
 }
+*/
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool TheaterChaseEffect (effectData &myData) {
+  // intParam[0] is delay for how moving speed
+  // intParam[1] is number of on pixels in a group
+  // intParam[2] is number of off pixels between on groups
+  // intParam[3] is how much the white leds should turn on for background light
+  bool returnValue = false;
+  unsigned int i;
+  unsigned int frameSize = myData.effectVar[0];
+  unsigned int frameOffset = myData.effectVar[1];
+  byte backgroundWhite = myData.intParam[3];
+  bool pattern[myData.intParam[1] + myData.intParam[2]];
+  switch (myData.effectState) {
+    case 0: // init or startup
+      if (myData.intParam[1] == 0) myData.intParam[1] = 1; // make sure there is some on pixels
+      if (myData.intParam[2] == 0) myData.intParam[2] = 2; // make sure there is some off pixels
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      myData.effectVar[0] = myData.intParam[1] + myData.intParam[2]; //frame size (on pixel count + off pixel count)
+      myData.effectVar[1] = 0; // Current starting pixel within frame
+      myData.effectState = 2; // display
+      break;
 
+    case 2: // Display next chase
+      // build pattern (on followed by off pixels)
+      for (i = 0; i < frameSize; ++i) {
+        if (i < myData.intParam[1]) pattern[i] = true; // if i is less then size of on pixel count
+        else pattern[i] = false;
+      }
+      for (i = myData.firstPixel; i <= myData.lastPixel; ++i) {
+        if (pattern[(i + frameOffset) % frameSize]) { // is pixel to be on?
+          setPixel(i, myData.r, myData.g, myData.b, myData.w, true);
+        } else {
+          setPixel(i, 0, 0, 0, backgroundWhite, false);
+        }
+      }
+      // increment frame offset for next frame display
+      myData.effectVar[1] = (myData.effectVar[1] + 1) % frameSize;
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause for speed delay
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      FillPixels(myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+/*
 // theaterChase(50);
 void theaterChase(int SpeedDelay) {
   for (int q = 0; q < 3; q++) {
-    if (shouldAbortEffect()) {
-      return;
-    }
+    //    if (shouldAbortEffect()) {
+    //      return;
+    //    }
     for (int i = 0; i < ledCount; i = i + 3) {
       setPixel(i + q, red, green, blue, white, false);  //turn every third pixel on
     }
@@ -404,24 +917,81 @@ void theaterChase(int SpeedDelay) {
     }
   }
 }
+*/
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool RainbowCycleEffect (effectData &myData) {
+  // intParam[0] is delay for how moving speed
+  // intParam[1] is number of rainbows to do in range
+  // intParam[2] is how much the white leds should turn on for background light
+  bool returnValue = false;
+  unsigned int i;
+  unsigned int rainbowOffset = myData.effectVar[0];
+  unsigned int rainbowSize = myData.effectVar[1];
+  byte backgroundWhite = myData.intParam[2];
+  byte wheelPos;
+  byte increasing, decreasing;
+  switch (myData.effectState) {
+    case 0: // init or startup
+      if (myData.intParam[1] == 0) myData.intParam[1] = 1; // at least 1 rainbow
+      myData.effectVar[0] = 0; // rainbow offset
+      myData.effectVar[1] = (myData.lastPixel - myData.firstPixel) / myData.intParam[1]; // pixel range of 1 rainbow
+      myData.effectState = 2; // display
+      break;
 
+    case 2: // Display next rainbow
+      for (i = myData.firstPixel; i <= myData.lastPixel; ++i) {
+        // Calculate color wheel position by taking current pixel location within the frame of a rainbow
+        // and mapping it's position number to the range of 0-255 for the color wheel.
+        // Then add in the current rainbow offset to shift the colors around.
+        // Final result is mod 256 to wrap around the color wheel.
+        wheelPos = (map((i % rainbowSize), 0, rainbowSize, 0, 255) + rainbowOffset) % 256;
+        increasing = wheelPos * 3; // overflow of byte is expected and desired.
+        decreasing = 255 - increasing;
+        if (wheelPos <= 85) {
+          setPixel(i, increasing, decreasing, 0, backgroundWhite, false);
+        } else if (wheelPos <= 170) {
+          setPixel(i, decreasing, 0, increasing, backgroundWhite, false);
+        } else {
+          setPixel(i, 0, increasing, decreasing, backgroundWhite, false);
+        }
+      }
+      // increment rainbow offset for next rainbow display
+      myData.effectVar[0] = (myData.effectVar[0] + 1) % rainbowSize; // rainbowOffset + 1 wrapped to rainbow size
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause for speed delay
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      FillPixels(myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+/*
 byte * Wheel(byte WheelPos) {
   static byte c[3];
+  byte increasing = WheelPos * 3; // Yes overflow is expected and desired.
+  byte decreasing = 255 - increasing;
 
-  if (WheelPos < 85) {
-    c[0] = WheelPos * 3;
-    c[1] = 255 - WheelPos * 3;
+  // Find color quadrent and fade to it
+  if (WheelPos <= 85) {
+    c[0] = increasing;
+    c[1] = decreasing;
     c[2] = 0;
-  } else if (WheelPos < 170) {
-    WheelPos -= 85;
-    c[0] = 255 - WheelPos * 3;
+  } else if (WheelPos <= 170) {
+    c[0] = decreasing;
     c[1] = 0;
-    c[2] = WheelPos * 3;
+    c[2] = increasing;
   } else {
-    WheelPos -= 170;
     c[0] = 0;
-    c[1] = WheelPos * 3;
-    c[2] = 255 - WheelPos * 3;
+    c[1] = increasing;
+    c[2] = decreasing;
   }
 
   return c;
@@ -432,9 +1002,9 @@ void rainbowCycle(int SpeedDelay) {
   uint16_t i, j;
 
   for (j = 0; j < 256 * 2; j++) { // 2 cycles of all colors on wheel
-    if (shouldAbortEffect()) {
-      return;
-    }
+    //    if (shouldAbortEffect()) {
+    //      return;
+    //    }
     for (i = 0; i < ledCount; i++) {
       c = Wheel(((i * 256 / ledCount) + j) & 255);
       setPixel(i, *c, *(c + 1), *(c + 2), 0, true);
@@ -443,13 +1013,43 @@ void rainbowCycle(int SpeedDelay) {
     delay(SpeedDelay);
   }
 }
+*/
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool ColorWipeEffect (effectData &myData) {
+  // intParam[0] is delay for how moving speed
+  bool returnValue = false;
 
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = myData.firstPixel; // Next pixel to light up
+      myData.effectState = 2; // display
+      break;
+
+    case 2: // Display next pixel
+      setPixel(myData.effectVar[0]++, myData.r, myData.g, myData.b, myData.w, false);
+      returnValue = myData.effectVar[0] > myData.lastPixel;
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause for speed delay
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+/*
 //  colorWipe(50);
 void colorWipe(int SpeedDelay) {
   for (uint16_t i = 0; i < ledCount; i++) {
-    if (shouldAbortEffect()) {
-      return;
-    }
+    //    if (shouldAbortEffect()) {
+    //      return;
+    //    }
     setPixel(i, red, green, blue, white, false);
     showStrip();
     delay(SpeedDelay);
@@ -469,16 +1069,58 @@ void colorWipeOnce(int SpeedDelay) {
 
   colorWipe(SpeedDelay);
 }
+*/
 
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool RunningLightsEffect (effectData &myData) {
+  // intParam[0] is delay for how moving speed
+  bool returnValue = false;
+  unsigned int i;
+  byte strength, r, g, b, w;
+  unsigned int offset = myData.effectVar[0];
+
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = 0; // Offset in sin wave vs pixel position
+      myData.effectState = 2; // display
+      break;
+
+    case 2: // Display next wave
+      for (i=myData.firstPixel; i <= myData.lastPixel; ++i) {
+        strength = sin(i + offset) * 127.0 + 128.0;
+        r = map (strength, 0, 255, 0, myData.r);
+        g = map (strength, 0, 255, 0, myData.g);
+        b = map (strength, 0, 255, 0, myData.b);
+        w = map (strength, 0, 255, 0, myData.w);
+        setPixel (i, r, g, b, w, false);
+      }
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause for speed delay
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      //FillPixels(myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, true);
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+
+/*
 //  RunningLights(50);
 void RunningLights(int WaveDelay) {
   int Position = 0;
 
   for (int i = 0; i < ledCount; i++)
   {
-    if (shouldAbortEffect()) {
-      return;
-    }
+    //    if (shouldAbortEffect()) {
+    //      return;
+    //    }
     Position++; // = 0; //Position + Rate;
     for (int i = 0; i < ledCount; i++) {
       // sine wave, 3 offset waves make a rainbow!
@@ -496,7 +1138,51 @@ void RunningLights(int WaveDelay) {
     delay(WaveDelay);
   }
 }
+*/
 
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool SnowSparkleEffect (effectData &myData) {
+  // intParam[0] is sparkle on delay
+  // intParam[1] is delay between sparkles
+  bool returnValue = false;
+
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = myData.firstPixel; // which pixel is sparkleing
+      myData.effectVar[1] = 0; // is sparkle lit?
+      myData.effectState = 2; // display
+      FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
+      break;
+
+    case 2: // Display next sparkle or darkness
+      if (myData.effectVar[1]) { // is sparkle lit?
+        // yes so turn back to base color and delay
+        setPixel (myData.effectVar[0], myData.r, myData.g, myData.b, myData.w, false);
+        myData.effectVar[1] = 0; // note that pixel is off
+        myData.effectDelay = currentMilliSeconds + myData.intParam[1];
+      } else {
+        // no so select a new pixel and lite then delay
+        myData.effectVar[0] = random(myData.firstPixel, myData.lastPixel+1); // which pixel is sparking
+        setPixel (myData.effectVar[0], 0, 0, 0, 255, false);
+        myData.effectVar[1] = 1; // note that pixel is on
+        myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      }
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+
+/*
 //  SnowSparkle(20, random(100,1000));
 void SnowSparkle(int SparkleDelay, int SpeedDelay) {
   setAll(red, green, blue, white);
@@ -509,7 +1195,51 @@ void SnowSparkle(int SparkleDelay, int SpeedDelay) {
   showStrip();
   delay(SpeedDelay);
 }
+*/
 
+// effect. Should return true if effect has finished, false if effect wants more itterations
+bool SparkleEffect (effectData &myData) {
+  // intParam[0] is sparkle on delay
+  // intParam[1] is delay between sparkles
+  bool returnValue = false;
+
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = myData.firstPixel; // which pixel is sparkleing
+      myData.effectVar[1] = 0; // is sparkle lit?
+      myData.effectState = 2; // display
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      break;
+
+    case 2: // Display next sparkle or darkness
+      if (myData.effectVar[1]) { // is sparkle lit?
+        // yes so turn back to base color and delay
+        setPixel (myData.effectVar[0], 0, 0, 0, 0, false);
+        myData.effectVar[1] = 0; // note that pixel is off
+        myData.effectDelay = currentMilliSeconds + myData.intParam[1];
+      } else {
+        // no so select a new pixel and lite then delay
+        myData.effectVar[0] = random(myData.firstPixel, myData.lastPixel+1); // which pixel is sparking
+        setPixel (myData.effectVar[0], myData.r, myData.g, myData.b, myData.w, false);
+        myData.effectVar[1] = 1; // note that pixel is on
+        myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      }
+      myData.effectState = 3; // delay
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect
+      returnValue = true;
+      break;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+
+/*
 //  Sparkle(0);
 void Sparkle(int SpeedDelay) {
   setAll(0, 0, 0, 0);
@@ -519,15 +1249,17 @@ void Sparkle(int SpeedDelay) {
   delay(SpeedDelay);
   setPixel(Pixel, 0, 0, 0, 0, false);
 }
+*/
 
+/*
 //  TwinkleRandom(20, 100, false);
 void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
   setAll(0, 0, 0, 0);
 
   for (int i = 0; i < Count; i++) {
-    if (shouldAbortEffect()) {
-      return;
-    }
+    //    if (shouldAbortEffect()) {
+    //      return;
+    //    }
     setPixel(random(ledCount), random(0, 255), random(0, 255), random(0, 255), 0, true);
     showStrip();
     delay(SpeedDelay);
@@ -538,7 +1270,7 @@ void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
 
   delay(SpeedDelay);
 }
-
+*/
 
 // BouncingBalls(3);
 void BouncingBalls(int BallCount) {
@@ -563,9 +1295,9 @@ void BouncingBalls(int BallCount) {
   }
 
   while (true) {
-    if (shouldAbortEffect()) {
-      return;
-    }
+    //    if (shouldAbortEffect()) {
+    //      return;
+    //    }
     for (int i = 0 ; i < BallCount ; i++) {
       TimeSinceLastBounce[i] =  millis() - ClockTimeSinceLastBounce[i];
       Height[i] = 0.5 * Gravity * pow( TimeSinceLastBounce[i] / 1000 , 2.0 ) + ImpactVelocity[i] * TimeSinceLastBounce[i] / 1000;
@@ -669,9 +1401,9 @@ void Fade(int SpeedDelay) {
   }
 
   for (int i = 0; i < 1020; i++) {
-    if (shouldAbortEffect()) {
-      return;
-    }
+    //    if (shouldAbortEffect()) {
+    //      return;
+    //    }
 
     redVal = calculateVal(stepR, redVal, i);
     grnVal = calculateVal(stepG, grnVal, i);
