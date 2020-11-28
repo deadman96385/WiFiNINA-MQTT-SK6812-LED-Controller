@@ -1396,7 +1396,7 @@ void Fade(int SpeedDelay) {
   // If no change then exit
   if (stepR == 0 && stepG == 0 && stepB == 0 && stepW == 0) {
     setAll(redVal, grnVal, bluVal, whiVal); // Write current values to LED pins
-    transitionDone = true;
+    //transitionDone = true;
     return;
   }
 
@@ -1417,7 +1417,7 @@ void Fade(int SpeedDelay) {
   }
 
   setAll(redVal, grnVal, bluVal, whiVal); // Write current values to LED pins
-  transitionDone = true;
+  //transitionDone = true;
 }
 
 void Lightning(int SpeedDelay) {
@@ -1468,7 +1468,7 @@ void ShowPixels() {
     }
   }
   showStrip();
-  transitionDone = true;
+  //transitionDone = true;
 }
 
 

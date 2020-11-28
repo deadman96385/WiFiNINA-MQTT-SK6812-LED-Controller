@@ -70,10 +70,8 @@ Adafruit_NeoPixel pixelStrings[] = {
 
 #define NUMSTRIPS (sizeof(pixelStrings)/sizeof(pixelStrings[0]))
 
-
 /******************************** OTHER GLOBALS *******************************/
 unsigned long currentMilliSeconds;
-unsigned long effectDelayStart;
 const unsigned long fiveSeconds = 5000;
 const unsigned long tenSeconds = 10000;
 
@@ -84,14 +82,9 @@ String previousEffect = "solid";
 //String effect = "solid";
 char effect[20]; // 20 is longer then longest effect name hopefully
 bool effectStart = false;
-unsigned int effectState = 0;
-unsigned int effectMemory[500];
-const unsigned int effectMemoryLen = 499;
 unsigned int firstPixel = 0;
 unsigned int lastPixel = ledCount;
 bool stateOn = true;
-bool transitionDone = true;
-bool transitionAbort = false;
 unsigned int transitionTime = 50; // 1-150
 unsigned int pixelLen = 1;
 unsigned int pixelArray[50];
@@ -142,8 +135,6 @@ WiFiClient net;
 PubSubClient client(net);
 
 // Adafruit_NeoPixel Strip;
-
-
 #include "NeoPixel_Effects.h"
 
 #define effectQueueSize 50
@@ -169,7 +160,6 @@ int freeMemory() {
 
 /********************************** START SETUP*****************************************/
 void setup() {
-
   unsigned int i, j;
   Serial.begin(115200);
   //  while (!Serial) {
@@ -182,7 +172,7 @@ void setup() {
   // noise will cause the call to randomSeed() to generate
   // different seed numbers each time the sketch runs.
   // randomSeed() will then shuffle the random function.
-  randomSeed(analogRead(0));
+  //randomSeed(analogRead(0));
 
   // Turn on power supply for LED strips. Controller runs on standby power from power supply
   pinMode(10, OUTPUT);
@@ -336,8 +326,6 @@ void printState() {
 void setOff() {
   setAll(0, 0, 0, 0);
   stateOn = false;
-  transitionDone = true; // Ensure we dont run the loop
-  transitionAbort = true; // Ensure we abort any current effect
   previousRed = 0;
   previousGreen = 0;
   previousBlue = 0;
@@ -405,27 +393,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println(F("End of key pairs"));
 
    const char* j_state = root["state"];
-  // unsigned int j_transition = root["transition"];
-//  JsonObject j_color = root["color"];
-  // unsigned int j_white_value = root["white_value"];
-  // unsigned int j_brightness = root["brightness"];
-  // const char* j_pixel = root["pixel"];
-  // const char* j_effect = root["effect"];
-  // unsigned int j_firstPixel = root["firstPixel"];
-  // unsigned int j_lastPixel = root["lastPixel"];
-  // unsigned int j_parameter1 = root["parameter1"];
-  // unsigned int j_parameter2 = root["parameter2"];
-  // unsigned int j_parameter3 = root["parameter3"];
-  // unsigned int j_parameter4 = root["parameter4"];
-  // Serial.print(F("First Pixel"));
-  // Serial.println(F(""));
-  // Serial.println(j_firstPixel);  
-  // Serial.print(F("Last Pixel"));
-  // Serial.println(F(""));
-  // Serial.println(j_lastPixel);
-  // Serial.print(F("Param 1"));
-  // Serial.println(F(""));
-  // Serial.println(j_parameter1);
 
   if (strcmp(topic, "led/led/set") == 0) {
     previousEffect = effect;
@@ -455,22 +422,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     
     /*
-    if (j_transition != 0) {
-      transitionTime = root["transition"];
-    }
-
-    if (j_white_value != 0) {
-      // To prevent our power supply from having a cow. Only RGB OR White
-      // Disabled because defaulting to it limits the total brightness if someone has a good power supply
-      //    realRed = 0;
-      //    realGreen = 0;
-      //    realBlue = 0;
-      realWhite = doc["white_value"];
-    }
-
-    if (j_brightness != 0) {
-      brightness = doc["brightness"];
-    }
 
     if (j_pixel != nullptr) {
       pixelLen = doc["pixel"].size();
@@ -483,35 +434,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       effectStart = true;
     }
 
-    if (j_effect != nullptr) {
-      effectString = root["effect"];
-      effect = effectString;  // may need a copy of string not a copy of pointer.
-      effectStart = true;
-    }
-
-    if (j_firstPixel != 0) {
-      firstPixel = doc["firstPixel"];
-    }
-
-    if (j_lastPixel != 0) {
-      lastPixel = doc["lastPixel"];
-    }
-
-    if (j_parameter1 != 0) {
-      effectParameter[0] = doc["parameter1"];
-    }
-
-    if (j_parameter2 != 0) {
-      effectParameter[1] = doc["parameter2"];
-    }
-
-    if (j_parameter3 != 0) {
-      effectParameter[2] = doc["parameter3"];
-    }
-
-    if (j_parameter4 != 0) {
-      effectParameter[3] = doc["parameter4"];
-    }
 */
     previousRed = red;
     previousGreen = green;
@@ -529,9 +451,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       blue = 0;
       white = 0;
     }
-
-    transitionAbort = true; // Kill the current effect
-    transitionDone = false; // Start a new transition
 
     if (stateOn) {
       setOn();
@@ -611,8 +530,9 @@ bool insideRange (unsigned int check, unsigned int first, unsigned int last) {
 /********************************** START MAIN LOOP *****************************************/
 void loop() {
   static bool wifiSeen = false;
-  static unsigned long msgDelayStart;
-  static unsigned long effectDelayStart;
+  bool effectRan = false;
+  //static unsigned long msgDelayStart;
+  //static unsigned long effectDelayStart;
   currentMilliSeconds = millis();
   unsigned int i, j;
   
@@ -630,10 +550,10 @@ void loop() {
     } else {
       client.loop(); // Check MQTT
     }
-
     //ArduinoOTA.poll();
   }
   
+  effectRan = false; // note if we have to ship data to strips
   if (effectStart) {
     for (i=0; i < effectQueueSize; ++i) {
       if (effectQueue[i].slotActive) {
@@ -648,6 +568,7 @@ void loop() {
           effectQueue[i].effectState = 1; // request termination
           finished = effectQueue[i].effectPtr(effectQueue[i]); // give effect an itteration to cleanup and finish
           effectQueue[i].slotActive = false; // Free up slot.
+          effectRan = true;
         }
       }
     }
@@ -666,22 +587,22 @@ void loop() {
         effectQueue[i].applyBrightness = false;
         effectQueue[i].effectState = 0;  // State 0 is alway init, allocate memory, set defaults
         effectQueue[i].effectPtr = NULL;
-        if (effect == "clear")          effectQueue[i].effectPtr = ClearEffect;
-        if (effect == "solid")          effectQueue[i].effectPtr = SolidEffect;
-        if (effect == "twinkle")        effectQueue[i].effectPtr = TwinkleEffect;
-        if (effect == "cylon bounce")   effectQueue[i].effectPtr = CylonBounceEffect;
-        if (effect == "fire")           effectQueue[i].effectPtr = FireEffect;
-        if (effect == "fade in out")    effectQueue[i].effectPtr = FadeInOutEffect;
-        if (effect == "strobe")         effectQueue[i].effectPtr = StrobeEffect;
-        if (effect == "theater chase")  effectQueue[i].effectPtr = TheaterChaseEffect;
-        if (effect == "rainbow cycle")  effectQueue[i].effectPtr = RainbowCycleEffect;
-        if (effect == "color wipe")     effectQueue[i].effectPtr = ColorWipeEffect;
-        if (effect == "running lights") effectQueue[i].effectPtr = RunningLightsEffect;
-        if (effect == "snow sparkle")   effectQueue[i].effectPtr = SnowSparkleEffect;
-        if (effect == "sparkle")        effectQueue[i].effectPtr = SparkleEffect;
-        if (effect == "twinkle random") effectQueue[i].effectPtr = SetOnePixelEffect;
-        if (effect == "bouncing balls") effectQueue[i].effectPtr = NoEffect;
-        if (effect == "lightning")      effectQueue[i].effectPtr = NoEffect;
+        if (!strcmp(effect, "clear"))          effectQueue[i].effectPtr = ClearEffect;
+        if (!strcmp(effect, "solid"))          effectQueue[i].effectPtr = SolidEffect;
+        if (!strcmp(effect, "twinkle"))        effectQueue[i].effectPtr = TwinkleEffect;
+        if (!strcmp(effect, "cylon bounce"))   effectQueue[i].effectPtr = CylonBounceEffect;
+        if (!strcmp(effect, "fire"))           effectQueue[i].effectPtr = FireEffect;
+        if (!strcmp(effect, "fade in out"))    effectQueue[i].effectPtr = FadeInOutEffect;
+        if (!strcmp(effect, "strobe"))         effectQueue[i].effectPtr = StrobeEffect;
+        if (!strcmp(effect, "theater chase"))  effectQueue[i].effectPtr = TheaterChaseEffect;
+        if (!strcmp(effect, "rainbow cycle"))  effectQueue[i].effectPtr = RainbowCycleEffect;
+        if (!strcmp(effect, "color wipe"))     effectQueue[i].effectPtr = ColorWipeEffect;
+        if (!strcmp(effect, "running lights")) effectQueue[i].effectPtr = RunningLightsEffect;
+        if (!strcmp(effect, "snow sparkle"))   effectQueue[i].effectPtr = SnowSparkleEffect;
+        if (!strcmp(effect, "sparkle"))        effectQueue[i].effectPtr = SparkleEffect;
+        if (!strcmp(effect, "twinkle random")) effectQueue[i].effectPtr = SetOnePixelEffect;
+        if (!strcmp(effect, "bouncing balls")) effectQueue[i].effectPtr = NoEffect;
+        if (!strcmp(effect, "lightning"))      effectQueue[i].effectPtr = NoEffect;
         break;
       }
     }
@@ -691,6 +612,7 @@ void loop() {
   // Give all running effects in queue an itteration
   for (i=0; i < effectQueueSize; ++i) {
     if (effectQueue[i].slotActive && !effectQueue[i].isOverlay) {
+      effectRan = true;
       bool effectFinished;
       effectFinished = effectQueue[i].effectPtr(effectQueue[i]); // give 1 itteration to effect
       if (effectFinished) { // If true effect is done so free up slot
@@ -700,133 +622,16 @@ void loop() {
   }
    for (i=0; i < effectQueueSize; ++i) {
     if (effectQueue[i].slotActive && effectQueue[i].isOverlay) {
+      effectRan = true;
       bool effectFinished;
       effectFinished = effectQueue[i].effectPtr(effectQueue[i]); // give 1 itteration to effect
       if (effectFinished) { // If true effect is done so free up slot
         effectQueue[i].slotActive = false; // indicate slot is used
        }
     }
-  } showStrip();
-       
-/*
-  // This var will go away when all effects are state machine based
-  transitionAbort = false; // Because we came from the loop and not 1/2 way though a transition
-
-  if (!transitionDone) {  // Once we have completed the transition, No point to keep going though the process
-    if (stateOn) {   // if the light is turned on
-
-      //EFFECTS
-      if (effect == "clear") {
-        setAll(0, 0, 0, 0);
-        transitionDone = true;
-      }
-      if (effect == "solid") {
-        //        if (transitionTime <= 1) {
-        setAll(red, green, blue, white);
-        transitionDone = true;
-        //        } else {
-        //          Fade(transitionTime);
-        //        }
-      }
-      //      if (effect == "pixel") {
-      //        ShowPixels();
-      //        // transitionDone = true; // done inside ShowPixels()
-      //      }
-      if (effect == "twinkle") {
-        Twinkle(200, (2 * transitionTime), true);
-      }
-      if (effect == "cylon bounce") {
-        //        CylonBounce(4, transitionTime / 10, 50);
-        CylonBounce(effectParameter[0], effectParameter[1], effectParameter[1] * 10);
-      }
-      if (effect == "fire") {
-        Fire(55, 120, (2 * transitionTime / 2));
-      }
-      if (effect == "fade in out") {
-        FadeInOut();
-      }
-      if (effect == "strobe") {
-        Strobe(10, transitionTime);
-      }
-      if (effect == "theater chase") {
-        theaterChase(transitionTime);
-      }
-      if (effect == "rainbow cycle") {
-        rainbowCycle(transitionTime / 5);
-      }
-      if (effect == "color wipe") {
-        colorWipe(transitionTime / 20);
-      }
-      if (effect == "running lights") {
-        RunningLights(transitionTime);
-      }
-      if (effect == "snow sparkle") {
-        SnowSparkle(20, random(transitionTime, (10 * transitionTime)));
-      }
-      if (effect == "sparkle") {
-        Sparkle(transitionTime);
-      }
-      if (effect == "twinkle random") {
-        TwinkleRandom(20, (2 * transitionTime), false);
-      }
-      if (effect == "bouncing balls") {
-        BouncingBalls(3);
-      }
-      if (effect == "lightning") {
-        Lightning(transitionTime);
-      }
-
-
-
-
-
-      // Run once notification effects
-      // Reverts color and effect after run
-      if (effect == "color wipe once") {
-        colorWipeOnce(transitionTime);
-
-        if (effect != "color wipe once") {
-          effect = previousEffect;
-        }
-
-        if (red == 0 && green == 0 && blue == 0 && white == 0) {
-          setOff();
-        } else {
-          transitionDone = false; // Run the old effect again
-        }
-        sendState();
-      }
-
-
-
-      //      if (effect == "bpm") {
-      //      }
-      //      if (effect == "candy cane") {
-      //      }
-      //      if (effect == "confetti" ) {
-      //      }
-      //      if (effect == "dots") {
-      //      }
-      //      if (effect == "glitter") {
-      //      }
-      //      if (effect == "juggle" ) {                           // eight colored dots, weaving in and out of sync with each other
-      //      }
-      //      if (effect == "lightning") {
-      //      }
-      //      if (effect == "police all") {                 //POLICE LIGHTS (TWO COLOR SOLID)
-      //      }
-      //      if (effect == "police one") {
-      //      }
-      //      if (effect == "rainbow with glitter") {               // FastLED's built-in rainbow generator with Glitter
-      //      }
-
-    } else {
-      setAll(0, 0, 0, 0);
-      transitionDone = true;
-    }
-    //  } else {
-    //    delay(600); // Save some power? (from 0.9w to 0.4w when off with ESP8266)
+  } 
+  if (effectRan) {
+    showStrip();
+    effectRan = false;
   }
-  effectStart = false;
-  */
 }
