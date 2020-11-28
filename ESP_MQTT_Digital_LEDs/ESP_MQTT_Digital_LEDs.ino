@@ -81,7 +81,8 @@ const char* on_cmd = "ON";
 const char* off_cmd = "OFF";
 const char* effectString = "solid";
 String previousEffect = "solid";
-String effect = "solid";
+//String effect = "solid";
+char effect[20]; // 20 is longer then longest effect name hopefully
 bool effectStart = false;
 unsigned int effectState = 0;
 unsigned int effectMemory[500];
@@ -186,6 +187,8 @@ void setup() {
   // Turn on power supply for LED strips. Controller runs on standby power from power supply
   pinMode(10, OUTPUT);
   digitalWrite(10, HIGH);
+  
+  strcpy (effect, "solid"); // init effect variable
 
   for (i = 0; i < NUMSTRIPS; i++)
   {
@@ -291,6 +294,28 @@ bool setup_wifi() {
   return false;
 }
 
+void printState() {
+  Serial.print(F("Current param state : "));
+  Serial.print(F(" R:")); Serial.print(red);
+  Serial.print(F(" G:")); Serial.print(green);
+  Serial.print(F(" B:")); Serial.print(blue);
+  Serial.print(F(" W:")); Serial.print(white);
+  Serial.print(F(" E:")); Serial.print(effect);
+  Serial.print(F(" f:")); Serial.print(firstPixel);
+  Serial.print(F(" l:")); Serial.print(lastPixel);
+  Serial.print(F(" 1:")); Serial.print(effectParameter[0]);
+  Serial.print(F(" 2:")); Serial.print(effectParameter[1]);
+  Serial.print(F(" 3:")); Serial.print(effectParameter[2]);
+  Serial.print(F(" 4:")); Serial.print(effectParameter[3]);
+  Serial.print(F(" T:")); Serial.print(transitionTime);
+  Serial.print(F(" S:")); Serial.print(stateOn);
+  // Serial.print(F(" T:")); Serial.print(transitionTime);
+  // Serial.print(F(" T:")); Serial.print(transitionTime);
+  // Serial.print(F(" T:")); Serial.print(transitionTime);
+  // Serial.print(F(" T:")); Serial.print(transitionTime);
+  Serial.println();
+}
+  
 /*
   SAMPLE PAYLOAD:
   {
@@ -330,6 +355,7 @@ void setOn() {
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
+  const char *theKey;
   Serial.println(F(""));
   Serial.print(F("Message arrived ["));
   Serial.print(topic);
@@ -344,39 +370,62 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
 
   const size_t capacity = BUFFER_SIZE + 60;
-  DynamicJsonDocument doc(capacity);
+  DynamicJsonDocument doc(capacity); // when is the heap allocation released / freed
   //  StaticJsonDocument<BUFFER_SIZE> doc;
-  auto error = deserializeJson(doc, payload, length);
-  JsonObject root = doc.as<JsonObject>(); // get the root object
-
+  DeserializationError error = deserializeJson(doc, payload, length);
   if (error) {
     Serial.print(F("deserializeJson() failed with code "));
     Serial.println(error.c_str());
-    return;
   }
+  JsonObject root = doc.as<JsonObject>(); // get the root object
+  Serial.println(F("Payload contains these keys"));
+  for (JsonPair p : root) {
+    theKey = p.key().c_str();
+    Serial.print(theKey);
+    // We only have string or number values for keys so test for string
+    if (p.value().is<char*>()) { // do we have a string?
+      Serial.println(p.value().as<char*>());
+    } else {
+      Serial.println(p.value().as<int>());
+    }
+    if (strcmp(topic, "led/led/set") == 0) {
+      if (!strcmp("transition", theKey))       transitionTime = p.value();
+      else if (!strcmp("white_value", theKey)) realWhite = p.value();
+      else if (!strcmp("brightness", theKey))  brightness = p.value();
+      else if (!strcmp("effect", theKey))      {strcpy(effect, p.value().as<char*>()); effectStart = true;}
+      else if (!strcmp("firstPixel", theKey))  firstPixel = p.value();
+      else if (!strcmp("lastPixel", theKey))   lastPixel = p.value();
+      else if (!strcmp("parameter1", theKey))  effectParameter[0] = p.value();
+      else if (!strcmp("parameter2", theKey))  effectParameter[1] = p.value();
+      else if (!strcmp("parameter3", theKey))  effectParameter[2] = p.value();
+      else if (!strcmp("parameter4", theKey))  effectParameter[3] = p.value();
+      //else if (!strcmp("transition", theKey))  transitionTime = p.value();
+    }
+  }
+  Serial.println(F("End of key pairs"));
 
-  const char* j_state = root["state"];
-  unsigned int j_transition = root["transition"];
+   const char* j_state = root["state"];
+  // unsigned int j_transition = root["transition"];
 //  JsonObject j_color = root["color"];
-  unsigned int j_white_value = root["white_value"];
-  unsigned int j_brightness = root["brightness"];
-  const char* j_pixel = root["pixel"];
-  const char* j_effect = root["effect"];
-  unsigned int j_firstPixel = root["firstPixel"];
-  unsigned int j_lastPixel = root["lastPixel"];
-  unsigned int j_parameter1 = root["parameter1"];
-  unsigned int j_parameter2 = root["parameter2"];
-  unsigned int j_parameter3 = root["parameter3"];
-  unsigned int j_parameter4 = root["parameter4"];
-  Serial.print(F("First Pixel"));
-  Serial.println(F(""));
-  Serial.println(j_firstPixel);  
-  Serial.print(F("Last Pixel"));
-  Serial.println(F(""));
-  Serial.println(j_lastPixel);
-  Serial.print(F("Param 1"));
-  Serial.println(F(""));
-  Serial.println(j_parameter1);
+  // unsigned int j_white_value = root["white_value"];
+  // unsigned int j_brightness = root["brightness"];
+  // const char* j_pixel = root["pixel"];
+  // const char* j_effect = root["effect"];
+  // unsigned int j_firstPixel = root["firstPixel"];
+  // unsigned int j_lastPixel = root["lastPixel"];
+  // unsigned int j_parameter1 = root["parameter1"];
+  // unsigned int j_parameter2 = root["parameter2"];
+  // unsigned int j_parameter3 = root["parameter3"];
+  // unsigned int j_parameter4 = root["parameter4"];
+  // Serial.print(F("First Pixel"));
+  // Serial.println(F(""));
+  // Serial.println(j_firstPixel);  
+  // Serial.print(F("Last Pixel"));
+  // Serial.println(F(""));
+  // Serial.println(j_lastPixel);
+  // Serial.print(F("Param 1"));
+  // Serial.println(F(""));
+  // Serial.println(j_parameter1);
 
   if (strcmp(topic, "led/led/set") == 0) {
     previousEffect = effect;
@@ -384,21 +433,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (j_state != nullptr) {
       if (strcmp(root["state"], on_cmd) == 0) {
         stateOn = true;
-        effectStart = true;
-      }
-      else if (strcmp(root["state"], off_cmd) == 0) {
+        //effectStart = true;
+      } else {
+      //else if (strcmp(root["state"], off_cmd) == 0) {
         stateOn = false;
       }
-      else {
-        sendState();
-      }
+      // else {
+        // sendState();
+      // }
 
     }
-
-    if (j_transition != 0) {
-      transitionTime = root["transition"];
-    }
-
     if (root.containsKey("color")) {
       JsonObject color = root["color"];
       realRed = color["r"]; // 255
@@ -408,6 +452,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       Serial.println(realRed);
       Serial.println(realGreen);
       Serial.println(realBlue);
+    }
+    
+    /*
+    if (j_transition != 0) {
+      transitionTime = root["transition"];
     }
 
     if (j_white_value != 0) {
@@ -436,7 +485,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     if (j_effect != nullptr) {
       effectString = root["effect"];
-      effect = effectString;
+      effect = effectString;  // may need a copy of string not a copy of pointer.
       effectStart = true;
     }
 
@@ -463,7 +512,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (j_parameter4 != 0) {
       effectParameter[3] = doc["parameter4"];
     }
-
+*/
     previousRed = red;
     previousGreen = green;
     previousBlue = blue;
@@ -491,6 +540,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
 
     sendState();
+    printState();
   }
 
 }
@@ -508,7 +558,7 @@ void sendState() {
   statedoc["white_value"] = realWhite;
   statedoc["brightness"] = brightness;
   statedoc["transition"] = transitionTime;
-  statedoc["effect"] = effect.c_str();
+  statedoc["effect"] = effect; //.c_str();
 
   //  char buffer[measureJson(statedoc) + 1];
   char buffer[256];
