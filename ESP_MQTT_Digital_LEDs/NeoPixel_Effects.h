@@ -37,17 +37,14 @@ typedef struct effectData{
 
 void showDirty() { // Send updated data to all led strips that need updates
   for (int i = 0; i < NUMSTRIPS; i++) {
-    if (strip_dirty[i]) {
+    if (stripDirty[i]) {
       pixelStrings[i].show();
-      strip_dirty[i] = false;
+      stripDirty[i] = false;
     }
   }
 }
 
 void showStrip() {
-  if (!stateOn) {
-    return;
-  }
   showDirty();
 }
 
@@ -62,10 +59,6 @@ void showStrip() {
    @return  void
 */
 void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
-  if (!stateOn) {
-    return;
-  }
-
   if (applyBrightness) {
     r = map(r, 0, 255, 0, brightness);
     g = map(g, 0, 255, 0, brightness);
@@ -93,17 +86,13 @@ void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrig
   ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
 
   // Note the strip is dirty because we set a value in it and updating is needed
-  strip_dirty[stripNumber] = true;
+  stripDirty[stripNumber] = true;
 
   // Actually set the pixel in the strip
   pixelStrings[stripNumber].setPixelColor(ledNumber, r, g, b, w); // faster to not build packed color word
 }
 
 void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
-  if (!stateOn) {
-    return;
-  }
-
   for (int j = 0; j < LED_COUNT_MAXIMUM; j++) {
     setPixel(j, r, g, b, w, false);
   }
@@ -115,13 +104,7 @@ void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
 
 void FillPixels(unsigned int firstPixel, unsigned int lastPixel, byte r, byte g, byte b, byte w, bool refreshStrip = true) {
   int stepDir = (lastPixel > firstPixel) ? 1 : -1;
-  if (!stateOn) {
-    return;
-  }
-  if (firstPixel == lastPixel) {
-    return;
-  }
-  for (unsigned int j = firstPixel; j != lastPixel; j += stepDir) {
+  for (unsigned int j = firstPixel; j <= lastPixel; j += stepDir) {
     setPixel(j, r, g, b, w, false);
   }
   if (refreshStrip) {
