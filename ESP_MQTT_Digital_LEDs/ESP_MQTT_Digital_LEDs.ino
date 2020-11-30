@@ -18,7 +18,7 @@
 // The maximum mqtt message size, included via header, is 256 bytes by default.
 #define MQTT_MAX_PACKET_SIZE 1024
 #define MQTT_KEEPALIVE 60
-#define MQTT_SOCKET_TIMEOUT 60
+#define MQTT_SOCKET_TIMEOUT 3
 
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
@@ -416,8 +416,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       } 
       else if (!strcmp("color", theKey)) {
         realRed = root["color"]["r"];
-        realRed = root["color"]["r"];
-        realRed = root["color"]["r"];
+        realGreen = root["color"]["g"];
+        realBlue = root["color"]["b"];
         red = map(realRed, 0, 255, 0, brightness);
         green = map(realGreen, 0, 255, 0, brightness);
         blue = map(realBlue, 0, 255, 0, brightness);
@@ -550,7 +550,7 @@ bool sendState() {
   //  char buffer[measureJson(statedoc) + 1];
   char buffer[256];
   size_t payload = serializeJson(statedoc, buffer);
-  if (debugPrint) serializeJsonPretty(statedoc, Serial);
+//  if (debugPrint) serializeJsonPretty(statedoc, Serial);
   if (debugPrint) Serial.println(buffer);
 
   char combinedArray[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName)+1]; // plus 1 for terminating 0
@@ -569,7 +569,7 @@ void attemptReconnect() {
   //  while (!client.connected()) {
   if (debugPrint) Serial.print(F("Attempting MQTT connection..."));
 
-  char mqttAvailTopic[sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + sizeof(MQTT_AVAIL_TOPIC)];
+  char mqttAvailTopic[1+sizeof(MQTT_STATE_TOPIC_PREFIX) + sizeof(deviceName) + sizeof(MQTT_AVAIL_TOPIC)];
   sprintf(mqttAvailTopic, "%s%s%s", MQTT_STATE_TOPIC_PREFIX, deviceName, MQTT_AVAIL_TOPIC); // with word space
 
   // Attempt to connect
@@ -715,9 +715,5 @@ void loop() {
   if (effectRan) {
     showStrip();
     effectRan = false;
-    if (debugPrint) {
-      Serial.print("Active Effects:"); 
-      Serial.println(activeEffects);
-    }
   }
 }
