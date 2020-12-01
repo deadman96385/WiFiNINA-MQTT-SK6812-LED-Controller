@@ -92,6 +92,49 @@ void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrig
   pixelStrings[stripNumber].setPixelColor(ledNumber, r, g, b, w); // faster to not build packed color word
 }
 
+void correctPixel (unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
+  unsigned int currentColor;
+  byte currentRed, currentBlue, currentGreen, currentWhite;
+  if (applyBrightness) {
+    r = map(r, 0, 255, 0, brightness);
+    g = map(g, 0, 255, 0, brightness);
+    b = map(b, 0, 255, 0, brightness);
+    w = map(w, 0, 255, 0, brightness);
+  }
+
+  int stripNumber = 0;
+  int ledNumber = 0;
+
+  // Find the correct strip to work with out of virtual all led strip
+  for (int i = 0; i < NUMSTRIPS; i++) {
+    if ((pixel >= stripStart[i]) && (pixel <= stripEnd[i])) {
+      stripNumber = i;
+      break; // found strip so don't check rest
+    }
+  }
+
+  // Find the correct LED in the selected strip
+  if (stripReversed[stripNumber]) { // is strip reversed?
+    ledNumber = stripEnd[stripNumber] - pixel; // offset from end
+  } else {
+    ledNumber = pixel - stripStart[stripNumber]; // offset from start
+  }
+  ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
+
+  currentColor = pixelStrings[stripNumber].getPixelColor(ledNumber);
+  currentWhite = (currentColor >> 24) & 0xFF;
+  currentRed   = (currentColor>> 16) & 0xFF;
+  currentGreen = (currentColor >> 8) & 0xFF;
+  currentBlue  = (currentColor) & 0xFF;
+  if ((currentWhite != w) || (currentRed != r) || (currentGreen != g) || (currentBlue != b)) {
+    // Note the strip is dirty because we set a value in it and updating is needed
+    stripDirty[stripNumber] = true;
+
+    // Actually set the pixel in the strip
+    pixelStrings[stripNumber].setPixelColor(ledNumber, r, g, b, w); // faster to not build packed color word
+  }
+}  
+
 void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
   for (int j = 0; j < LED_COUNT_MAXIMUM; j++) {
     setPixel(j, r, g, b, w, false);
@@ -109,6 +152,12 @@ void FillPixels(unsigned int firstPixel, unsigned int lastPixel, byte r, byte g,
   }
   if (refreshStrip) {
     showDirty();
+  }
+}
+void correctPixels(unsigned int firstPixel, unsigned int lastPixel, byte r, byte g, byte b, byte w) {
+  int stepDir = (lastPixel > firstPixel) ? 1 : -1;
+  for (unsigned int j = firstPixel; j <= lastPixel; j += stepDir) {
+    correctPixel(j, r, g, b, w, false);
   }
 }
 
@@ -168,14 +217,61 @@ bool NoEffect (effectData &myData) {
 
 // clear effect. Should return true if effect has finished, false if effect wants more itterations
 bool ClearEffect (effectData &myData) {
-  FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
-  return true;
+  bool returnValue = false;
+  switch (myData.effectState) {
+    case 0: // init or startup;
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      myData.effectDelay = currentMilliSeconds + 1000;
+      myData.effectState = 3; // delay
+      break;      
+      
+    case 2: // refresh effect;
+      correctPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0);
+      myData.effectDelay = currentMilliSeconds + 1000;
+      myData.effectState = 3; // delay
+      break;      
+      
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+      
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+      break;
+  }
+  return returnValue;
 }
 
 // Solid effect. Should return true if effect has finished, false if effect wants more itterations
 bool SolidEffect (effectData &myData) {
   FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
-  return true; // true if effect is finished. False for more itterations.
+  bool returnValue = false;
+  switch (myData.effectState) {
+    case 0: // init or startup;
+      FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
+      myData.effectDelay = currentMilliSeconds + 1000;
+      myData.effectState = 3; // delay
+      break;      
+      
+    case 2: // refresh effect;
+      correctPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w);
+      myData.effectDelay = currentMilliSeconds + 1000;
+      myData.effectState = 3; // delay
+      break;      
+      
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+      
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+      break;
+  }
+  return returnValue;
 }
 
 // effect. Should return true if effect has finished, false if effect wants more itterations
@@ -228,6 +324,7 @@ bool TwinkleEffect (effectData &myData) {
 
     default: // state has been lost so end effect
     case 1: // end effect and release memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       if (myData.effectMemory != NULL) {
         for (i = 0; i < myData.intParam[1]; ++i) {
           j = effectMemory[i]; // grab location of pixel on strip
@@ -290,6 +387,7 @@ bool TwinkleRandomEffect (effectData &myData) {
 
     default: // state has been lost so end effect
     case 1: // end effect and release memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       if (myData.effectMemory != NULL) {
         for (i = 0; i < myData.intParam[1]; ++i) {
           j = effectMemory[i]; // grab location of pixel on strip
@@ -581,10 +679,10 @@ bool FireEffect (effectData &myData) {
 
     default: // state has been lost so end effect
     case 1: // end effect and release memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       if (myData.effectMemory != NULL) {
         free(myData.effectMemory);
       }
-      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       returnValue = true;
   }
   return returnValue; // true if effect is finished. False for more itterations.
@@ -1021,6 +1119,7 @@ bool ColorWipeEffect (effectData &myData) {
 
     default: // state has been lost so end effect
     case 1: // end effect
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       returnValue = true;
       break;
   }
@@ -1087,7 +1186,7 @@ bool RunningLightsEffect (effectData &myData) {
 
     default: // state has been lost so end effect
     case 1: // end effect
-      //FillPixels(myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, true);
+      FillPixels(myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       returnValue = true;
       break;
   }
@@ -1159,6 +1258,7 @@ bool SnowSparkleEffect (effectData &myData) {
 
     default: // state has been lost so end effect
     case 1: // end effect
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       returnValue = true;
       break;
   }
@@ -1216,6 +1316,7 @@ bool SparkleEffect (effectData &myData) {
 
     default: // state has been lost so end effect
     case 1: // end effect
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       returnValue = true;
       break;
   }

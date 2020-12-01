@@ -153,6 +153,7 @@ bool stripDirty[NUMSTRIPS] = {
 
 /******************* support variables for queue of running effects ************/
 effectData effectQueue[effectQueueSize];
+int activeEffects = 0;
 
 #ifdef __arm__
 // should use uinstd.h to define sbrk but Due causes a conflict
@@ -299,7 +300,7 @@ bool setup_wifi() {
 
 void printState() {
   if (debugPrint) {
-    Serial.print(F("Current param state : "));
+    Serial.print(F("Current:"));
     Serial.print(F(" R:")); Serial.print(red); Serial.print("/"); Serial.print(realRed);
     Serial.print(F(" G:")); Serial.print(green); Serial.print("/"); Serial.print(realGreen);
     Serial.print(F(" B:")); Serial.print(blue); Serial.print("/"); Serial.print(realBlue);
@@ -314,10 +315,17 @@ void printState() {
     Serial.print(F(" T:")); Serial.print(transitionTime);
     Serial.print(F(" S:")); Serial.print(stateOn);
     Serial.print(F(" edit:")); Serial.print(effectEdit);
-    Serial.print(F(" new:")); Serial.print(effectNew);
+    Serial.print(F(" new:")); Serial.print(effectStart);
     Serial.print(F(" o:")); Serial.print(effectIsOverlay);
-    // Serial.print(F(" T:")); Serial.print(transitionTime);
+    Serial.print(F(" AE:")); Serial.print(activeEffects);
     Serial.println();
+  }
+}
+
+void printQueueState() {
+  if (debugPrint) {
+    Serial.print(F("Active Effects:"));
+    Serial.println(activeEffects);
   }
 }
   
@@ -457,66 +465,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
    //const char* j_state = root["state"];
 
   if (strcmp(topic, "led/led/set") == 0) {
-/*
-    if (j_state != nullptr) {
-      if (strcmp(root["state"], on_cmd) == 0) {
-        stateOn = true;
-        //effectStart = true;
-      } else {
-      //else if (strcmp(root["state"], off_cmd) == 0) {
-        stateOn = false;
-      }
-      // else {
-        // sendState();
-      // }
-
-    }
-    if (root.containsKey("color")) {
-      JsonObject color = root["color"];
-      realRed = color["r"]; // 255
-      realGreen = color["g"]; // 0
-      realBlue = color["b"]; // 0
-      //realWhite = 0;        // This may have been issue with keeping white and color on at same time
-      Serial.println(realRed);
-      Serial.println(realGreen);
-      Serial.println(realBlue);
-    }
-    */
-    /*
-
-    if (j_pixel != nullptr) {
-      pixelLen = doc["pixel"].size();
-      if (pixelLen > sizeof(pixelArray)) {
-        pixelLen = sizeof(pixelArray);
-      }
-      for (int i = 0; i < pixelLen; i++) {
-        pixelArray[i] = doc["pixel"][i];
-      }
-      effectStart = true;
-    }
-
-*/
-
-/*
-    if (stateOn) {
-      red = map(realRed, 0, 255, 0, brightness);
-      green = map(realGreen, 0, 255, 0, brightness);
-      blue = map(realBlue, 0, 255, 0, brightness);
-      white = map(realWhite, 0, 255, 0, brightness);
-    } else {
-      red = 0;
-      green = 0;
-      blue = 0;
-      white = 0;
-    }
-*/
-/*
-    if (stateOn) {
-      setOn();
-    } else {
-      setOff(); // NOTE: Will change transitionDone
-    }
-*/
     previousEffect = effect;
     previousRed = red;
     previousGreen = green;
@@ -602,6 +550,25 @@ bool insideRange (unsigned int check, unsigned int first, unsigned int last) {
   return ((first <= check) && (check <= last));
 }
 
+void printHelp() {
+  Serial.println(F("Commands available"));
+  Serial.println(F("fp# First Pixel\nlp# Last Pixel"));
+  Serial.println(F("p1#/p2#/p3#/p4# parameter n"));
+  Serial.println(F("co#,#,#,#  ColorR,G,B,W"));
+  Serial.println(F("br# Brightness"));
+  Serial.println(F("ed Toggle edit flags"));
+  Serial.println(F("ne New instance of current effect"));
+  Serial.println(F("ov Toggle overlay setting"));
+  Serial.println(F("e:<effectName>"));
+  Serial.println(F("tr# Transation time"));
+  Serial.println(F("st toggle the on/off state"));
+  Serial.println(F("qu print state of effect queue"));
+  Serial.println(F("help print this help"));
+  Serial.println(F("? print this help"));
+}
+
+
+
 /********************************** START MAIN LOOP *****************************************/
 void loop() {
   static bool wifiSeen = false;
@@ -609,7 +576,10 @@ void loop() {
   //static unsigned long msgDelayStart;
   //static unsigned long effectDelayStart;
   currentMilliSeconds = millis();
-  unsigned int i, j, activeEffects;
+  unsigned int i, j;
+  static int cmdState = 0;
+  static char cmdBuffer[50];
+  static int cmdIndex = 0;
   
   if ((WiFi.status() != WL_CONNECTED) || !wifiSeen) {
     //    delay(1);
@@ -631,8 +601,94 @@ void loop() {
     //ArduinoOTA.poll();
   }
   
+  switch (cmdState) {
+    default:
+    case 0: // Send cmd prompt
+      cmdIndex = 0;
+      cmdState = 1; // poll for input
+      Serial.print(F("CMD: "));
+      break;
+      
+    case 1:
+      if( Serial.available()) {
+        cmdBuffer[cmdIndex] = Serial.read();
+        if (cmdBuffer[cmdIndex] == 10)  // new line 
+          cmdState = 2; // decode command
+        if (cmdBuffer[cmdIndex] == 13)  // new line or carrage return
+          cmdState = 2; // decode command
+        if (cmdIndex == 48) // Buffer is going to overflow. Try and decode
+          cmdState = 2; // decode command
+        ++cmdIndex;
+      }
+      break;
+    
+    case 2: // decode command
+      {
+        cmdBuffer[cmdIndex] = 0; // terminating zero for string
+        cmdState = 0;
+        if (0 == strncmp("fp", cmdBuffer, 2)) { // First Pixel
+          sscanf (cmdBuffer+2, "%d", firstPixel);
+        }
+        else if (0 == strncmp("p1", cmdBuffer, 2)) { //
+          sscanf (cmdBuffer+2, "%d", effectParameter[0]);
+        }
+        else if (0 == strncmp("p2", cmdBuffer, 2)) { //
+          sscanf (cmdBuffer+2, "%d", effectParameter[1]);
+        }
+        else if (0 == strncmp("p3", cmdBuffer, 2)) { //
+          sscanf (cmdBuffer+2, "%d", effectParameter[2]);
+        }
+        else if (0 == strncmp("p4", cmdBuffer, 2)) { //
+          sscanf (cmdBuffer+2, "%d", effectParameter[3]);
+        }
+        else if (0 == strncmp("co", cmdBuffer, 2)) { //
+          sscanf (cmdBuffer+2, "%d,%d,%d,%d", realRed, realGreen, realBlue, realWhite);
+        }
+        else if (0 == strncmp("br", cmdBuffer, 2)) { //
+          sscanf (cmdBuffer+2, "%d", brightness);
+        }
+        else if (0 == strncmp("ed", cmdBuffer, 2)) { //
+          effectEdit = !effectEdit;
+          Serial.print (F("Effect edit is now ")); Serial.println(effectEdit);
+        }
+        else if (0 == strncmp("ne", cmdBuffer, 2)) { //
+          effectNew = true;
+        }
+        else if (0 == strncmp("ov", cmdBuffer, 2)) { //
+          effectIsOverlay = !effectIsOverlay;
+          Serial.print (F("Effect overlay is now ")); Serial.println(effectIsOverlay);
+        }
+        else if (0 == strncmp("e:", cmdBuffer, 2)) { //
+          strcpy (effect, cmdBuffer+2);
+        }
+        else if (0 == strncmp("tr", cmdBuffer, 2)) { //
+          sscanf (cmdBuffer+2, "%d", transitionTime);
+        }
+        else if (0 == strncmp("st", cmdBuffer, 2)) { //
+          stateOn = !stateOn;
+          if (stateOn) setOn();
+          else setOff();
+        }
+        else if (0 == strncmp("qu", cmdBuffer, 2)) { //
+          printQueueState();
+        }
+        else if (0 == strncmp("he", cmdBuffer, 2)) { //
+          printHelp();
+        }
+        else if (0 == strncmp("?", cmdBuffer, 1)) { //
+          printHelp();
+        }
+        effectStart = effectStart || effectEdit || effectNew;
+        effectNew = false;
+        printState();
+      }      
+      break; 
+  }
+    
+  
   effectRan = false; // note if we have to ship data to strips
   if (effectStart) {
+    effectStart = false;
     if (!effectIsOverlay) {
       for (i=0; i < effectQueueSize; ++i) {
         if (effectQueue[i].slotActive) {
@@ -687,7 +743,6 @@ void loop() {
         break;
       }
     }
-    effectStart = false;
   }
   
   // Give all running effects in queue an itteration
