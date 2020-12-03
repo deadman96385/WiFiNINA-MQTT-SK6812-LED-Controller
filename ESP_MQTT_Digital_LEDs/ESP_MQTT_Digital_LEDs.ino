@@ -563,8 +563,24 @@ void printHelp() {
   Serial.println(F("tr# Transation time"));
   Serial.println(F("st toggle the on/off state"));
   Serial.println(F("qu print state of effect queue"));
-  Serial.println(F("help print this help"));
-  Serial.println(F("? print this help"));
+  Serial.println(F("clear"));
+  Serial.println(F("solid"));
+  Serial.println(F("twinkle"));
+  Serial.println(F("cylon bounce"));
+  Serial.println(F("fire"));
+  Serial.println(F("fade in out"));
+  Serial.println(F("strobe"));
+  Serial.println(F("theater chase"));
+  Serial.println(F("rainbow cycle"));
+  Serial.println(F("color wipe"));
+  Serial.println(F("running lights"));
+  Serial.println(F("snow sparkle"));
+  Serial.println(F("sparkle"));
+  Serial.println(F("set one pixel"));
+  Serial.println(F("twinkle random"));
+  Serial.println(F("bouncing balls"));
+  Serial.println(F("lightning"));
+  Serial.println(F("help/? print this help"));
 }
 
 
@@ -737,9 +753,10 @@ void loop() {
         if (!strcmp(effect, "running lights")) effectQueue[i].effectPtr = RunningLightsEffect;
         if (!strcmp(effect, "snow sparkle"))   effectQueue[i].effectPtr = SnowSparkleEffect;
         if (!strcmp(effect, "sparkle"))        effectQueue[i].effectPtr = SparkleEffect;
-        if (!strcmp(effect, "twinkle random")) effectQueue[i].effectPtr = SetOnePixelEffect;
-        if (!strcmp(effect, "bouncing balls")) effectQueue[i].effectPtr = NoEffect;
-        if (!strcmp(effect, "lightning"))      effectQueue[i].effectPtr = NoEffect;
+        if (!strcmp(effect, "set one pixel")) effectQueue[i].effectPtr = SetOnePixelEffect;
+        if (!strcmp(effect, "twinkle random")) effectQueue[i].effectPtr = TwinkleRandomEffect;
+        if (!strcmp(effect, "bouncing balls")) effectQueue[i].effectPtr = BouncingBallsEffect;
+        if (!strcmp(effect, "lightning"))      effectQueue[i].effectPtr = LightingingEffect;
         break;
       }
     }

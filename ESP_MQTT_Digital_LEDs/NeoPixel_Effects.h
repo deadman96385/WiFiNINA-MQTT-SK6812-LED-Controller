@@ -493,10 +493,10 @@ bool CylonBounceEffect (effectData &myData) {
   // intParam[2] is edge of eye pixel count (1 or 2 are good)
   // intParam[3] is delay for eye to pause for at each end
   bool returnValue = false;
-  unsigned int eyeLeftEdge;
-  unsigned int eyeLeftCore;
-  unsigned int eyeRightCore;
-  unsigned int eyeRightEdge;
+  unsigned int eyeLeftEdge = myData.effectVar[1];
+  unsigned int eyeLeftCore = eyeLeftEdge + myData.intParam[2];
+  unsigned int eyeRightCore = eyeLeftCore + myData.intParam[1];
+  unsigned int eyeRightEdge = eyeRightCore + myData.intParam[2];
   switch (myData.effectState) {
     case 0: // init or startup
       // check if eye fits in pixel range to bounce in
@@ -515,28 +515,37 @@ bool CylonBounceEffect (effectData &myData) {
       }
       break;
 
-    case 2: {// Display eye
-        eyeLeftEdge = myData.effectVar[1];
-        eyeLeftCore = eyeLeftEdge + myData.intParam[2];
-        eyeRightCore = eyeLeftCore + myData.intParam[1];
-        eyeRightEdge = eyeRightCore + myData.intParam[2];
-        FillPixels(eyeLeftEdge, eyeLeftCore - 1, myData.r / 5, myData.g / 5, myData.b / 5, myData.w / 5, false); // dim
-        FillPixels(eyeLeftCore, eyeRightCore, myData.r, myData.g, myData.b, myData.w, false);  // bright
-        FillPixels(eyeRightCore + 1, eyeRightEdge, myData.r / 5, myData.g / 5, myData.b / 5, myData.w / 5, false); // dim
-        showStrip();
-        FillPixels(eyeLeftEdge, eyeRightEdge, 0, 0, 0, 0, false);
-        if (eyeRightEdge >= myData.lastPixel) { // have we hit right edge?
-          myData.effectVar[0] = -1;
-          myData.effectDelay = currentMilliSeconds + myData.intParam[3]; // pause at end
-        } else if (eyeLeftEdge == 0) { // have we hit left edge?
-          myData.effectVar[0] = 1;
-          myData.effectDelay = currentMilliSeconds + myData.intParam[3]; // pause at end
-        } else {
-          myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause in middle
-        }
-        myData.effectVar[1] += myData.effectVar[0]; // move eye start to next pixel
-        myData.effectState = 3; // delay
+    case 2: // Display eye
+      // erase portion of eye that will go dark
+      eyeLeftEdge = myData.effectVar[1];
+      eyeLeftCore = eyeLeftEdge + myData.intParam[2];
+      eyeRightCore = eyeLeftCore + myData.intParam[1];
+      eyeRightEdge = eyeRightCore + myData.intParam[2];
+      if (myData.effectVar[0] == 1) { // moving up
+        setPixel(eyeLeftEdge, 0, 0, 0, 0, false); // turn off pixel away from which eye will move.
+      } else {
+        setPixel(eyeRightEdge, 0, 0, 0, 0, false); // turn off pixel away from which eye will move.
       }
+      
+      myData.effectVar[1] += myData.effectVar[0]; // move eye start to next pixel
+      
+      // Display eye in new locatipon
+      eyeLeftEdge = myData.effectVar[1];
+      eyeLeftCore = eyeLeftEdge + myData.intParam[2];
+      eyeRightCore = eyeLeftCore + myData.intParam[1];
+      eyeRightEdge = eyeRightCore + myData.intParam[2];
+      FillPixels(eyeLeftEdge, eyeLeftCore - 1, myData.r / 5, myData.g / 5, myData.b / 5, myData.w / 5, false); // dim
+      FillPixels(eyeLeftCore, eyeRightCore, myData.r, myData.g, myData.b, myData.w, false);  // bright
+      FillPixels(eyeRightCore + 1, eyeRightEdge, myData.r / 5, myData.g / 5, myData.b / 5, myData.w / 5, false); // dim
+      
+      // Figure out how long to wait for
+      if ((eyeRightEdge >= myData.lastPixel) || (eyeLeftEdge <= myData.firstPixel)) { // have we hit edge?
+        myData.effectDelay = currentMilliSeconds + myData.intParam[3]; // pause at end
+        myData.effectVar[0] *= -1;  // flip direction of movement
+      } else {
+        myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause in middle
+      }
+      myData.effectState = 3; // delay
       break;
 
     case 3: // delay
@@ -1392,6 +1401,88 @@ void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
 }
 */
 
+typedef struct bouncingBallsData {
+  float Height;
+  float ImpactVelocity;
+  float TimeSinceLastBounce;
+  int   Position;
+  long  ClockTimeSinceLastBounce;
+  float Dampening;
+} bouncingBallData;
+
+// Bouncing balls effect. Should return true if effect has finished, false if effect wants more itterations
+bool BouncingBallsEffect (effectData &myData) {
+  // intParam[0] is delay between updates, may want 0 // always use [0] for delay setting
+  // intParam[1] is how many balls to bounce
+  bool returnValue = false;
+  bouncingBallData * ballData = (bouncingBallData *)myData.effectMemory; // cast void pointer to correct type
+  int ballCount = myData.intParam[1];
+  int ledCount = myData.lastPixel  - myData.firstPixel + 1;
+  const static float Gravity = -9.81;
+  const static int StartHeight = 1;
+  const static float ImpactVelocityStart = sqrt( -2 * Gravity * StartHeight );
+  
+  switch (myData.effectState) {
+    case 0: // init or startup
+      if (myData.intParam[1] < 1) myData.intParam[1] = 1;
+      if (myData.intParam[1] > 100) myData.intParam[1] = 100;
+      ballCount = myData.intParam[1];
+
+      // grab memory for each ball to be bounced
+      myData.effectMemory = (void *)malloc(ballCount * sizeof(bouncingBallData));
+      ballData = (bouncingBallData *)myData.effectMemory; // update since we just allocated memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      if (myData.effectMemory == NULL) {
+        returnValue = true; // no memory to do effect
+      } else { // set up balls
+        for (int i = 0 ; i < ballCount ; i++) {
+          ballData[i].ClockTimeSinceLastBounce = millis();
+          ballData[i].Height = StartHeight;
+          ballData[i].Position = 0;
+          ballData[i].ImpactVelocity = ImpactVelocityStart;
+          ballData[i].TimeSinceLastBounce = 0;
+          ballData[i].Dampening = 0.90 - float(i) / pow(ballCount, 2);
+        }
+      }
+      myData.effectState = 2; // display effect
+      break;
+
+    case 2: // Display data
+      for (int i = 0 ; i < ballCount ; i++) {
+        setPixel(ballData[i].Position, 0, 0, 0, 0, false);
+        ballData[i].TimeSinceLastBounce =  millis() - ballData[i].ClockTimeSinceLastBounce;
+        ballData[i].Height  = 0.5 * Gravity * pow( ballData[i].TimeSinceLastBounce / 1000 , 2.0 ) + ballData[i].ImpactVelocity * ballData[i].TimeSinceLastBounce / 1000;
+
+        if ( ballData[i].Height < 0 ) {
+          ballData[i].Height = 0;
+          ballData[i].ImpactVelocity = ballData[i].Dampening * ballData[i].ImpactVelocity;
+          ballData[i].ClockTimeSinceLastBounce = millis();
+
+          if ( ballData[i].ImpactVelocity < 0.01 ) {
+            ballData[i].ImpactVelocity = ImpactVelocityStart;
+          }
+        }
+        ballData[i].Position = round( ballData[i].Height * (ledCount - 1) / StartHeight);
+        setPixel(ballData[i].Position, red, green, blue, white, false);
+      }
+      break;
+
+    case 3: // delay
+      if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      if (myData.effectMemory != NULL) {
+        free(myData.effectMemory);
+      }
+      returnValue = true;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+
+/*
 // BouncingBalls(3);
 void BouncingBalls(int BallCount) {
   float Gravity = -9.81;
@@ -1442,7 +1533,7 @@ void BouncingBalls(int BallCount) {
     setAll(0, 0, 0, 0);
   }
 }
-
+*/
 
 /**************************** START TRANSITION FADER *****************************************/
 // From https://www.arduino.cc/en/Tutorial/ColorCrossfader
@@ -1469,6 +1560,7 @@ void BouncingBalls(int BallCount) {
   and then divides that gap by 1020 to determine the size of the step
   between adjustments in the value.
 */
+/*
 int calculateStep(int prevValue, int endValue) {
   int step = endValue - prevValue;  // What's the overall gap?
   if (step) {                       // If its non-zero,
@@ -1477,11 +1569,13 @@ int calculateStep(int prevValue, int endValue) {
 
   return step;
 }
+*/
 /* The next function is calculateVal. When the loop value, i,
    reaches the step size appropriate for one of the
    colors, it increases or decreases the value of that color by 1.
    (R, G, and B are each calculated separately.)
 */
+/*
 int calculateVal(int step, int val, int i) {
   if ((step) && i % step == 0) { // If step is non-zero and its time to change a value,
     if (step > 0) {              //   increment the value if step is positive...
@@ -1502,6 +1596,8 @@ int calculateVal(int step, int val, int i) {
 
   return val;
 }
+*/
+/*
 // Fade(50);
 void Fade(int SpeedDelay) {
   int redVal = previousRed;
@@ -1539,7 +1635,85 @@ void Fade(int SpeedDelay) {
   setAll(redVal, grnVal, bluVal, whiVal); // Write current values to LED pins
   //transitionDone = true;
 }
+*/
 
+// Bouncing balls effect. Should return true if effect has finished, false if effect wants more itterations
+bool LightingingEffect (effectData &myData) {
+  // intParam[0] is delay multiplier between lighting strikes // always use [0] for delay setting
+  // intParam[1] is how many strikes to do
+  bool returnValue = false;
+  int strikesLeft = myData.intParam[1];
+  int ledCount = myData.lastPixel  - myData.firstPixel + 1;
+  int strikeLength = myData.effectVar[2] - myData.effectVar[1] + 1;
+  unsigned int i;
+  byte r,g,b,w, dimmer;
+  
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = random(3,8); // Dimmer prestrikes left
+      myData.effectVar[1] = random(0,10); // prestrike start
+      myData.effectVar[2] = random(10,ledCount); // prestrike end
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      myData.effectState = 2; // dim delay
+      break;
+
+    case 2: // Display dim flash
+      if (--myData.effectVar[0] > 0) { // more dim flashes left
+        myData.effectVar[1] = random(0,10); // prestrike start
+        myData.effectVar[2] = random(10,ledCount); // prestrike end
+        myData.effectVar[3] = 1; // lights on
+        dimmer = random(10,brightness);
+        r = map(red, 0, 255, 0, dimmer);
+        g = map(green, 0, 255, 0, dimmer);
+        b = map(blue, 0, 255, 0, dimmer);
+        w = map(white, 0, 255, 0, dimmer);
+        FillPixels (myData.effectVar[1], myData.effectVar[2], r, g, b, w, false);
+        myData.effectDelay = currentMilliSeconds + random(4,15);
+        myData.effectState = 4; // dim on delay       
+      } else {
+        myData.effectState = 3; // display bright flash
+      }
+      break;
+      
+    case 3: // Display bright flash
+        myData.effectVar[3] = 1; // lights on
+        myData.effectVar[0] = random(3,8); // Dimmer prestrikes left for next strike
+        FillPixels (myData.firstPixel, myData.lastPixel, red, green, blue, white, false);
+        myData.effectVar[1] = myData.firstPixel;
+        myData.effectVar[2] = myData.lastPixel;
+        myData.effectDelay = currentMilliSeconds + 200;
+        myData.effectState = 6; //bright delay
+
+    case 4: // delay on dim
+      if (currentMilliSeconds >= myData.effectDelay) {
+        FillPixels (myData.effectVar[1], myData.effectVar[2], 0, 0, 0, 0, false);
+        myData.effectDelay = currentMilliSeconds + 50 + random(100);
+        myData.effectState = 5; // delay off dim
+      }
+      break;
+      
+    case 5: // delay off
+      if (currentMilliSeconds >= myData.effectDelay) {
+        myData.effectState = 2; // display dim
+      }
+      
+    case 6: // delay on bright
+      if (currentMilliSeconds >= myData.effectDelay) {
+        FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+        myData.effectDelay = currentMilliSeconds + 200 + (random(myData.effectVar[0])*50); // bright dark
+        myData.effectState = 5; // delay off dim
+      }
+      break;
+      
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+
+/*
 void Lightning(int SpeedDelay) {
   setAll(0, 0, 0, 0);
   int ledstart = random(ledCount);           // Determine starting location of flash
@@ -1565,7 +1739,8 @@ void Lightning(int SpeedDelay) {
   }
   delay(random(SpeedDelay) * 50);        // delay between strikes
 }
-
+*/
+/*
 void ShowPixels() {
   // If there are only 2 items in the array then we are setting from and to othersise set each led in the array.
   if (pixelLen == 2) {
@@ -1591,7 +1766,7 @@ void ShowPixels() {
   //transitionDone = true;
 }
 
-
+*/
 
 
 
