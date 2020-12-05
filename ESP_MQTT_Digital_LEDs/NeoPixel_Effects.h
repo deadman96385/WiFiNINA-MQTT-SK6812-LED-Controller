@@ -80,23 +80,23 @@ void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrig
   // Bedroom lights are pixels 1901-2323
   // Need to virtualy remap main room to one continous range
   #define lengthMr1 422
-  #define lengthMr2 200
-  #define lengthKt 800
+  #define lengthMr2 768
+  #define lengthKt 590
   #define lengthBr 801
   #define lengthMr (lengthMr1 + lengthMr2)
   // lengthMR1 + lengthMR2 + lengthKt + lengthBr must equal ledCount (2323)
   #define startMr1 0
-  #define endMr1 (startMr1 + lengthMr1)
+  #define endMr1 (startMr1 + lengthMr1 - 1)
   #define startKt (endMr1 + 1)
-  #define endKt (startKt + lengthKt)
+  #define endKt (startKt + lengthKt - 1)
   #define startMr2 (endKt + 1)
-  #define endMr2 (startMr2 + lengthMr2)
+  #define endMr2 (startMr2 + lengthMr2 - 1)
   #define startBr (endMr2 + 1)
   #define endBr = ledCount
   #define vStartMr 0
-  #define vEndMr (vStartMr + lengthMr)
+  #define vEndMr (vStartMr + lengthMr - 1)
   #define vStartKt (vEndMr + 1)
-  #define vEndKt (vStartKt + lengthKt)
+  #define vEndKt (vStartKt + lengthKt - 1)
   
   if (insideroom(pixel, vStartMr, vEndMr)) {
     if (insideroom(pixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
@@ -141,6 +141,14 @@ void correctPixel (unsigned int pixel, byte r, byte g, byte b, byte w, bool appl
 
   int stripNumber = 0;
   int ledNumber = 0;
+
+  if (insideroom(pixel, vStartMr, vEndMr)) {
+    if (insideroom(pixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
+      pixel = pixel - lengthMr1 + startMr2; // offset into second part of virtual mr applied to actual mr2
+    }
+  } else if (insideroom(pixel,vStartKt, vEndKt)) {
+    pixel = pixel - vStartKt + startKt; // offset into virutal kitchen applied to real kitchen range
+  }
 
   // Find the correct strip to work with out of virtual all led strip
   for (int i = 0; i < NUMSTRIPS; i++) {

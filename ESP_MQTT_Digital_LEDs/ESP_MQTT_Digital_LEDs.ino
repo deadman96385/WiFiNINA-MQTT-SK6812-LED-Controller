@@ -304,23 +304,23 @@ bool setup_wifi() {
 void printState() {
   if (debugPrint) {
     Serial.print(F("Current:"));
-    Serial.print(F(" R:")); Serial.print(red); Serial.print("/"); Serial.print(realRed);
-    Serial.print(F(" G:")); Serial.print(green); Serial.print("/"); Serial.print(realGreen);
-    Serial.print(F(" B:")); Serial.print(blue); Serial.print("/"); Serial.print(realBlue);
-    Serial.print(F(" W:")); Serial.print(white); Serial.print("/"); Serial.print(realWhite);
-    Serial.print(F(" E:")); Serial.print(effect);
-    Serial.print(F(" f:")); Serial.print(firstPixel);
-    Serial.print(F(" l:")); Serial.print(lastPixel);
-    Serial.print(F(" 1:")); Serial.print(effectParameter[0]);
-    Serial.print(F(" 2:")); Serial.print(effectParameter[1]);
-    Serial.print(F(" 3:")); Serial.print(effectParameter[2]);
-    Serial.print(F(" 4:")); Serial.print(effectParameter[3]);
-    Serial.print(F(" T:")); Serial.print(transitionTime);
-    Serial.print(F(" S:")); Serial.print(stateOn);
-    Serial.print(F(" edit:")); Serial.print(effectEdit);
-    Serial.print(F(" new:")); Serial.print(effectStart);
-    Serial.print(F(" o:")); Serial.print(effectIsOverlay);
-    Serial.print(F(" AE:")); Serial.print(activeEffects);
+    Serial.print(F(" r:")); Serial.print(red); Serial.print("/"); Serial.print(realRed);
+    Serial.print(F(" g:")); Serial.print(green); Serial.print("/"); Serial.print(realGreen);
+    Serial.print(F(" b:")); Serial.print(blue); Serial.print("/"); Serial.print(realBlue);
+    Serial.print(F(" w:")); Serial.print(white); Serial.print("/"); Serial.print(realWhite);
+    Serial.print(F(" e:")); Serial.print(effect);
+    Serial.print(F(" fp:")); Serial.print(firstPixel);
+    Serial.print(F(" lp:")); Serial.print(lastPixel);
+    Serial.print(F(" p1:")); Serial.print(effectParameter[0]);
+    Serial.print(F(" p2:")); Serial.print(effectParameter[1]);
+    Serial.print(F(" p3:")); Serial.print(effectParameter[2]);
+    Serial.print(F(" p4:")); Serial.print(effectParameter[3]);
+    Serial.print(F(" tr:")); Serial.print(transitionTime);
+    Serial.print(F(" st:")); Serial.print(stateOn);
+    Serial.print(F(" ed:")); Serial.print(effectEdit);
+    Serial.print(F(" ne:")); Serial.print(effectStart);
+    Serial.print(F(" ov:")); Serial.print(effectIsOverlay);
+    Serial.print(F(" ae:")); Serial.print(activeEffects);
     Serial.println();
   }
 }
@@ -791,7 +791,7 @@ void loop() {
         effectQueue[i].b = realBlue;            // What color effect should use if selectable
         effectQueue[i].w = realWhite;            // What color effect should use if selectable
         for (j=0; j < 4; ++j) {;
-          effectQueue[i].intParam[j] = effectParameter[i];  // defined per effect
+          effectQueue[i].intParam[j] = effectParameter[j];  // defined per effect
         }
         effectQueue[i].applyBrightness = false;
         effectQueue[i].effectState = 0;  // State 0 is alway init, allocate memory, set defaults
