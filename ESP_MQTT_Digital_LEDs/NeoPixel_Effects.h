@@ -23,6 +23,7 @@ typedef struct effectData{
   unsigned int effectState;  // State 0 is alway init, allocate memory, set defaults
   // State 1 is always end, release memory if allocated
   // States 2+ defined per effect
+  char *effectName;
 } effectData;
 
 ///**************************** START EFFECTS *****************************************/

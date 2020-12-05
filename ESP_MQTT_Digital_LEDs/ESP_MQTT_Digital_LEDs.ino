@@ -177,9 +177,9 @@ int freeMemory() {
 void setup() {
   unsigned int i, j;
   Serial.begin(115200);
-  //  while (!Serial) {
-  //    ; // wait for serial port to connect. Needed for native USB port only
-  //  }
+   while (!Serial) {
+     ; // wait for serial port to connect. Needed for native USB port only
+   }
   if (debugPrint) Serial.println ();
   if (debugPrint) Serial.print (F("Initial Free memory = "));
   if (debugPrint) Serial.println (freeMemory ());
@@ -223,11 +223,14 @@ void setup() {
     effectQueue[i].effectState = 0;  // State 0 is alway init, allocate memory, set defaults
   }
   
-  client.setServer(MQTT_SERVER, MQTT_PORT);
-  client.setCallback(mqttCallback);
-  if (debugPrint) Serial.println(F("Ready"));
-  if (debugPrint) Serial.print (F("End of setup Free memory = "));
-  if (debugPrint) Serial.println (freeMemory ());
+  // client.setServer(MQTT_SERVER, MQTT_PORT);
+  // client.setCallback(mqttCallback);
+  if (debugPrint) {
+    Serial.println();
+    Serial.println(F("Ready"));
+    Serial.print (F("End of setup Free memory = "));
+    Serial.println (freeMemory ());
+  }
 }
 
 
@@ -552,8 +555,9 @@ bool insideRange (unsigned int check, unsigned int first, unsigned int last) {
 
 void printHelp() {
   Serial.println(F("Commands available"));
-  Serial.println(F("fp# First Pixel\nlp# Last Pixel"));
-  Serial.println(F("p1#/p2#/p3#/p4# parameter n"));
+  Serial.println(F("fp# First Pixel\t\tlp# Last Pixel"));
+  Serial.println(F("p1#\tp2#\tp3#\tp4#\tparameter n"));
+  Serial.println(F("r# Red\tg# Green\tb# Blue\tw# White"));
   Serial.println(F("co#,#,#,#  ColorR,G,B,W"));
   Serial.println(F("br# Brightness"));
   Serial.println(F("ed Toggle edit flags"));
@@ -563,23 +567,23 @@ void printHelp() {
   Serial.println(F("tr# Transation time"));
   Serial.println(F("st toggle the on/off state"));
   Serial.println(F("qu print state of effect queue"));
-  Serial.println(F("clear"));
-  Serial.println(F("solid"));
-  Serial.println(F("twinkle"));
-  Serial.println(F("cylon bounce"));
-  Serial.println(F("fire"));
-  Serial.println(F("fade in out"));
-  Serial.println(F("strobe"));
-  Serial.println(F("theater chase"));
-  Serial.println(F("rainbow cycle"));
-  Serial.println(F("color wipe"));
-  Serial.println(F("running lights"));
-  Serial.println(F("snow sparkle"));
-  Serial.println(F("sparkle"));
-  Serial.println(F("set one pixel"));
-  Serial.println(F("twinkle random"));
-  Serial.println(F("bouncing balls"));
-  Serial.println(F("lightning"));
+  Serial.print  (F("\t'clear'\t"));
+  Serial.print  (F("\t'solid'\t"));
+  Serial.print  (F("\t'twinkle'"));
+  Serial.print  (F("\t'cylon bounce'\t"));
+  Serial.print  (F("\t'fire'\t\t"));
+  Serial.println(F("\t'fade in out'"));
+  Serial.print  (F("\t'strobe'"));
+  Serial.print  (F("\t'theater chase'"));
+  Serial.print  (F("\t'rainbow cycle'"));
+  Serial.print  (F("\t'color wipe'\t"));
+  Serial.println(F("\t'running lights'"));
+  Serial.print  (F("\t'snow sparkle'"));
+  Serial.print  (F("\t'sparkle'"));
+  Serial.print  (F("\t'set one pixel'"));
+  Serial.print  (F("\t'twinkle random'"));
+  Serial.print  (F("\t'bouncing balls'"));
+  Serial.println(F("\t'lightning'"));
   Serial.println(F("help/? print this help"));
 }
 
@@ -597,6 +601,7 @@ void loop() {
   static char cmdBuffer[50];
   static int cmdIndex = 0;
   
+  /*
   if ((WiFi.status() != WL_CONNECTED) || !wifiSeen) {
     //    delay(1);
     wifiSeen = setup_wifi();
@@ -616,7 +621,7 @@ void loop() {
     }
     //ArduinoOTA.poll();
   }
-  
+  */
   switch (cmdState) {
     default:
     case 0: // Send cmd prompt
@@ -627,77 +632,129 @@ void loop() {
       
     case 1:
       if( Serial.available()) {
-        cmdBuffer[cmdIndex] = Serial.read();
-        if (cmdBuffer[cmdIndex] == 10)  // new line 
+        char rcvd = Serial.read();
+        if (rcvd == 10) { // new line 
+          cmdBuffer[cmdIndex] = 0; // terminating zero for string
           cmdState = 2; // decode command
-        if (cmdBuffer[cmdIndex] == 13)  // new line or carrage return
+        } else if (rcvd == 13) { // new line or carrage return
+          cmdBuffer[cmdIndex] = 0; // terminating zero for string
           cmdState = 2; // decode command
-        if (cmdIndex == 48) // Buffer is going to overflow. Try and decode
+        } else if (cmdIndex == 48) { // Buffer is going to overflow. Try and decode
+          cmdBuffer[cmdIndex++] = rcvd;
+          cmdBuffer[cmdIndex] = 0; // terminating zero for string
           cmdState = 2; // decode command
-        ++cmdIndex;
+        } else {
+          cmdBuffer[cmdIndex++] = rcvd;
+        }
+      //} else {
+      //  Serial.print(".");
       }
       break;
     
     case 2: // decode command
-      {
-        cmdBuffer[cmdIndex] = 0; // terminating zero for string
-        cmdState = 0;
-        if (0 == strncmp("fp", cmdBuffer, 2)) { // First Pixel
-          sscanf (cmdBuffer+2, "%d", firstPixel);
-        }
-        else if (0 == strncmp("p1", cmdBuffer, 2)) { //
-          sscanf (cmdBuffer+2, "%d", effectParameter[0]);
-        }
-        else if (0 == strncmp("p2", cmdBuffer, 2)) { //
-          sscanf (cmdBuffer+2, "%d", effectParameter[1]);
-        }
-        else if (0 == strncmp("p3", cmdBuffer, 2)) { //
-          sscanf (cmdBuffer+2, "%d", effectParameter[2]);
-        }
-        else if (0 == strncmp("p4", cmdBuffer, 2)) { //
-          sscanf (cmdBuffer+2, "%d", effectParameter[3]);
-        }
-        else if (0 == strncmp("co", cmdBuffer, 2)) { //
-          sscanf (cmdBuffer+2, "%d,%d,%d,%d", realRed, realGreen, realBlue, realWhite);
-        }
-        else if (0 == strncmp("br", cmdBuffer, 2)) { //
-          sscanf (cmdBuffer+2, "%d", brightness);
-        }
-        else if (0 == strncmp("ed", cmdBuffer, 2)) { //
-          effectEdit = !effectEdit;
-          Serial.print (F("Effect edit is now ")); Serial.println(effectEdit);
-        }
-        else if (0 == strncmp("ne", cmdBuffer, 2)) { //
-          effectNew = true;
-        }
-        else if (0 == strncmp("ov", cmdBuffer, 2)) { //
-          effectIsOverlay = !effectIsOverlay;
-          Serial.print (F("Effect overlay is now ")); Serial.println(effectIsOverlay);
-        }
-        else if (0 == strncmp("e:", cmdBuffer, 2)) { //
-          strcpy (effect, cmdBuffer+2);
-        }
-        else if (0 == strncmp("tr", cmdBuffer, 2)) { //
-          sscanf (cmdBuffer+2, "%d", transitionTime);
-        }
-        else if (0 == strncmp("st", cmdBuffer, 2)) { //
-          stateOn = !stateOn;
-          if (stateOn) setOn();
-          else setOff();
-        }
-        else if (0 == strncmp("qu", cmdBuffer, 2)) { //
-          printQueueState();
-        }
-        else if (0 == strncmp("he", cmdBuffer, 2)) { //
-          printHelp();
-        }
-        else if (0 == strncmp("?", cmdBuffer, 1)) { //
-          printHelp();
-        }
-        effectStart = effectStart || effectEdit || effectNew;
-        effectNew = false;
-        printState();
-      }      
+      Serial.print("Got:");
+      Serial.println(cmdBuffer);
+      cmdState = 0;
+      cmdIndex = 0;
+      if (0 == strncmp("fp", cmdBuffer, 2)) { // First Pixel
+        sscanf (cmdBuffer+2, "%d", &firstPixel);
+      }
+      else if (0 == strncmp("lp", cmdBuffer, 2)) { //
+        sscanf (cmdBuffer+2, "%d", &lastPixel);
+      }
+      else if (0 == strncmp("p1", cmdBuffer, 2)) { //
+        sscanf (cmdBuffer+2, "%d", &effectParameter[0]);
+      }
+      else if (0 == strncmp("p2", cmdBuffer, 2)) { //
+        sscanf (cmdBuffer+2, "%d", &effectParameter[1]);
+      }
+      else if (0 == strncmp("p3", cmdBuffer, 2)) { //
+        sscanf (cmdBuffer+2, "%d", &effectParameter[2]);
+      }
+      else if (0 == strncmp("p4", cmdBuffer, 2)) { //
+        sscanf (cmdBuffer+2, "%d", &effectParameter[3]);
+      }
+      else if (0 == strncmp("col", cmdBuffer, 3)) { //
+        int ri, gi, bi, wi;
+        sscanf (cmdBuffer+3, "%d,%d,%d,%d", &ri, &gi, &bi, &wi);
+        realRed = ri;  realGreen = gi; realBlue = bi; realWhite = wi;
+        red = map(realRed, 0, 255, 0, brightness);
+        green = map(realGreen, 0, 255, 0, brightness);
+        blue = map(realBlue, 0, 255, 0, brightness);
+        white = map(realWhite, 0, 255, 0, brightness);
+      }
+      else if (0 == strncmp("co", cmdBuffer, 2)) { //
+        int ri, gi, bi, wi;
+        sscanf (cmdBuffer+2, "%d,%d,%d,%d", &ri, &gi, &bi, &wi);
+        realRed = ri;  realGreen = gi; realBlue = bi; realWhite = wi;
+        red = map(realRed, 0, 255, 0, brightness);
+        green = map(realGreen, 0, 255, 0, brightness);
+        blue = map(realBlue, 0, 255, 0, brightness);    
+        white = map(realWhite, 0, 255, 0, brightness);  
+      }
+      else if (0 == strncmp("br", cmdBuffer, 2)) { //
+        sscanf (cmdBuffer+2, "%d", &brightness);
+      }
+      else if (0 == strncmp("r", cmdBuffer, 1)) { //
+        int ri;
+        sscanf (cmdBuffer+1, "%d", &ri);
+        realRed = ri;
+        red = map(realRed, 0, 255, 0, brightness);
+      }
+      else if (0 == strncmp("g", cmdBuffer, 1)) { //
+        int gi;
+        sscanf (cmdBuffer+1, "%d", &gi);
+        realGreen = gi;  
+        green = map(realGreen, 0, 255, 0, brightness);
+      }
+      else if (0 == strncmp("b", cmdBuffer, 1)) { //
+        int bi, wi;
+        sscanf (cmdBuffer+1, "%d", &bi);
+        realBlue = bi;
+        blue = map(realBlue, 0, 255, 0, brightness);
+      }
+      else if (0 == strncmp("w", cmdBuffer, 1)) { //
+        int wi;
+        sscanf (cmdBuffer+1, "%d", &wi);
+        realWhite = wi;
+        white = map(realWhite, 0, 255, 0, brightness);
+      }
+      else if (0 == strncmp("ed", cmdBuffer, 2)) { //
+        effectEdit = !effectEdit;
+        Serial.print (F("Effect edit is now ")); Serial.println(effectEdit);
+      }
+      else if (0 == strncmp("ne", cmdBuffer, 2)) { //
+        effectNew = true;
+      }
+      else if (0 == strncmp("ov", cmdBuffer, 2)) { //
+        effectIsOverlay = !effectIsOverlay;
+        Serial.print (F("Effect overlay is now ")); Serial.println(effectIsOverlay);
+      }
+      else if (0 == strncmp("e:", cmdBuffer, 2)) { //
+        strcpy (effect, cmdBuffer+2);
+      }
+      else if (0 == strncmp("tr", cmdBuffer, 2)) { //
+        sscanf (cmdBuffer+2, "%d", &transitionTime);
+      }
+      else if (0 == strncmp("st", cmdBuffer, 2)) { //
+        stateOn = !stateOn;
+        if (stateOn) setOn();
+        else setOff();
+      }
+      else if (0 == strncmp("qu", cmdBuffer, 2)) { //
+        printQueueState();
+      }
+      else if (0 == strncmp("he", cmdBuffer, 2)) { //
+        printHelp();
+      }
+      else if (0 == strncmp("?", cmdBuffer, 1)) { //
+        //printHelp();
+      } else { 
+        Serial.println("???");
+      }
+      effectStart = effectStart || effectEdit || effectNew;
+      effectNew = false;
+      printState();
       break; 
   }
     
