@@ -801,8 +801,8 @@ void loop() {
             break;
             
           case 4: // Above Computer
-            firstPixel = 450;
-            lastPixel  = 550;
+            firstPixel = 700;
+            lastPixel  = 790;
             break;
             
           case 5: // Main Room

@@ -304,7 +304,6 @@ bool ClearEffect (effectData &myData) {
 
 // Solid effect. Should return true if effect has finished, false if effect wants more itterations
 bool SolidEffect (effectData &myData) {
-  FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
   bool returnValue = false;
   switch (myData.effectState) {
     case 0: // init or startup;
@@ -314,8 +313,9 @@ bool SolidEffect (effectData &myData) {
       break;
 
     case 2: // refresh effect;
+//      FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
       correctPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w);
-      myData.effectDelay = currentMilliSeconds + 1000;
+      myData.effectDelay = currentMilliSeconds + 100;
       myData.effectState = 3; // delay
       break;
 
@@ -1688,13 +1688,13 @@ bool LightingingEffect (effectData &myData) {
     case 2: // Display flash
       if (myData.effectVar[0] == 0) { // time to start next dim sequence
         myData.effectVar[0] = random(myData.intParam[2],myData.intParam[3]+1); // Dimmer prestrikes left
-        Serial.print ("Dim flashes:"); Serial.print(myData.effectVar[0]);
+        //Serial.print ("Dim flashes:"); Serial.print(myData.effectVar[0]);
         // Bright flash is entire pixel range. Each dim flash should grown in size.
         // Growth per flash should be (pixel range)/(dim flashes + 2)
         // The Plus two is fudge factor so bright flash has strip to grow into and to leave
         //   some room for random moving of dim flashes
         myData.effectVar[3] = (myData.lastPixel - myData.firstPixel + 1)/(myData.effectVar[0] + 2);
-        Serial.print ("  Dim growth step size:"); Serial.println(myData.effectVar[3]);
+       // Serial.print ("  Dim growth step size:"); Serial.println(myData.effectVar[3]);
         myData.effectVar[4] = myData.effectVar[3]; // first dim flash is length of step size
       }
 
@@ -1714,13 +1714,13 @@ bool LightingingEffect (effectData &myData) {
         b = map(myData.b, 0, 255, 0, dimmer);
         w = map(myData.w, 0, 255, 0, dimmer);
         FillPixels (myData.effectVar[1], myData.effectVar[2], r, g, b, w, false);
-        Serial.print (myData.effectVar[1]); Serial.print(":"); Serial.print(myData.effectVar[2]);
-        Serial.print (" - "); Serial.println(myData.effectVar[2] - myData.effectVar[1] + 1);
+//        Serial.print (myData.effectVar[1]); Serial.print(":"); Serial.print(myData.effectVar[2]);
+//        Serial.print (" - "); Serial.println(myData.effectVar[2] - myData.effectVar[1] + 1);
         myData.effectDelay = currentMilliSeconds + random(4,15)*myData.intParam[0];
         myData.effectState = 3; // delay dim
       } else {
         FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
-        Serial.println("Bright");
+//        Serial.println("Bright");
         myData.effectDelay = currentMilliSeconds + random(4,15)*myData.intParam[0];
         myData.effectState = 4; // delay bright
       }
