@@ -2,7 +2,7 @@
 
 This project shows a super easy way to get started using Digital LED strips with [Home Assistant](https://home-assistant.io/), a sick, open-source Home Automation platform that can do just about anything. 
 
-The code covered in this repository utilizes [Home Assistant's MQTT JSON Light Component](https://home-assistant.io/components/light.mqtt_json/) and any microcontroller that supports WiFiNINA. 
+The code covered in this repository utilizes [Home Assistant's MQTT JSON Light Component](https://home-assistant.io/components/light.mqtt_json/) and any Arduino MKR that supports WiFiNINA. 
 
 This project can run standalone. When turned on the white LEDs will light.  This means you can use the project as a normal light source. If the device can connect to WiFi and MQTT, then you are able to control remotely.
 
@@ -18,15 +18,12 @@ Most of the effects incorporate the currently selected color while other effects
 The default speed for the effects is hard coded and is set when the light is first turned on. When changing between effects, the previously used transition speed will take over. If the effects don't look great, play around with the slider to adjust the transition speed (AKA the effect's animation speed). 
 
 #### Bugs/TODO
-1. Currently all strips will perform the same effect, this can cause some of them to look bad like "Cylon". I am planning to add two modes one which effects all Strips and one that splits them into their individual strips.
-2. Make some effects like twinkle less jaring by having them fade out instead of just turning off
-3. Fixup and enable all of the effects that are disabled currently
+
 
 #### OTA Uploading
-ArduionoOTA has native support for WiFiNINA devices and its been implemented here
+ArduinoOTA has native support for WiFiNINA devices and its been implemented here
 
 #### Parts List
-- [Digital RGBW Leds (SK6812RGBW)](https://www.adafruit.com/product/2842)
 - More to come
 
 #### Sample MQTT commands
