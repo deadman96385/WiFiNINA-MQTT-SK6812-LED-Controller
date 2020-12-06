@@ -26,6 +26,42 @@ typedef struct effectData{
   char *effectName;
 } effectData;
 
+  // Mainroom lights are pixels 0-421 and 612-1379
+  // Kitchen lights are pixels 422-1199
+  // Bedroom lights are pixels 1380-2323
+  // Need to virtualy remap main room to one continous range
+  //   Lengths of segments of the LED strip of interest (Mr is main room, Kt is Kitchen, Br is Bedroom
+  #define lengthMr1 422
+  #define lengthMr2 768
+  #define lengthKt 590
+  #define lengthBr 543
+  #define lengthMr (lengthMr1 + lengthMr2)
+  // lengthMR1 + lengthMR2 + lengthKt + lengthBr must equal ledCount (2323)
+  // Calculate location of segments in real strip
+  #define startMr1 0
+  #define endMr1   (startMr1 + lengthMr1 - 1)
+  #define startKt  (endMr1 + 1)
+  #define endKt    (startKt + lengthKt - 1)
+  #define startMr2 (endKt + 1)
+  #define endMr2   (startMr2 + lengthMr2 - 1)
+  #define startBr  (endMr2 + 1)
+  #define endBr    ledCount
+
+  // Calculate remapped locations of rooms (so virtual strip? with contignous Mr)
+  #define vStartBr startBr
+  #define vEndBr   endBr
+  #define vStartMr 0
+  #define vEndMr   (vStartMr + lengthMr - 1)
+  #define vStartKt (vEndMr + 1)
+  #define vEndKt   (vStartKt + lengthKt - 1)
+
+  // vStartMr = 0
+  // vEndMr   = 1189
+  // vStartKt = 1190
+  // vEndKt   = 1779
+  // vStartBr = 1780
+  // vEndBr   = 2322
+
 ///**************************** START EFFECTS *****************************************/
 // Effects from: https://www.tweaking4all.com/hardware/arduino/adruino-led-strip-effects/
 
@@ -74,30 +110,7 @@ void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrig
 
   int stripNumber = 0;
   int ledNumber = 0;
-  
-  // Mainroom lights are pixels 0-500 and 1200-1900
-  // Kitchen lights are pixels 501-1199
-  // Bedroom lights are pixels 1901-2323
-  // Need to virtualy remap main room to one continous range
-  #define lengthMr1 422
-  #define lengthMr2 768
-  #define lengthKt 590
-  #define lengthBr 801
-  #define lengthMr (lengthMr1 + lengthMr2)
-  // lengthMR1 + lengthMR2 + lengthKt + lengthBr must equal ledCount (2323)
-  #define startMr1 0
-  #define endMr1 (startMr1 + lengthMr1 - 1)
-  #define startKt (endMr1 + 1)
-  #define endKt (startKt + lengthKt - 1)
-  #define startMr2 (endKt + 1)
-  #define endMr2 (startMr2 + lengthMr2 - 1)
-  #define startBr (endMr2 + 1)
-  #define endBr = ledCount
-  #define vStartMr 0
-  #define vEndMr (vStartMr + lengthMr - 1)
-  #define vStartKt (vEndMr + 1)
-  #define vEndKt (vStartKt + lengthKt - 1)
-  
+
   if (insideroom(pixel, vStartMr, vEndMr)) {
     if (insideroom(pixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
       pixel = pixel - lengthMr1 + startMr2; // offset into second part of virtual mr applied to actual mr2
@@ -178,7 +191,7 @@ void correctPixel (unsigned int pixel, byte r, byte g, byte b, byte w, bool appl
     // Actually set the pixel in the strip
     pixelStrings[stripNumber].setPixelColor(ledNumber, r, g, b, w); // faster to not build packed color word
   }
-}  
+}
 
 void setAll(byte r, byte g, byte b, byte w, bool refreshStrip = true) {
   for (int j = 0; j < LED_COUNT_MAXIMUM; j++) {
@@ -268,18 +281,18 @@ bool ClearEffect (effectData &myData) {
       FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       myData.effectDelay = currentMilliSeconds + 1000;
       myData.effectState = 3; // delay
-      break;      
-      
+      break;
+
     case 2: // refresh effect;
       correctPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0);
       myData.effectDelay = currentMilliSeconds + 1000;
       myData.effectState = 3; // delay
-      break;      
-      
+      break;
+
     case 3: // delay
       if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
       break;
-      
+
     default: // state has been lost so end effect
     case 1: // end effect and release memory
       FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
@@ -298,18 +311,18 @@ bool SolidEffect (effectData &myData) {
       FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
       myData.effectDelay = currentMilliSeconds + 1000;
       myData.effectState = 3; // delay
-      break;      
-      
+      break;
+
     case 2: // refresh effect;
       correctPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w);
       myData.effectDelay = currentMilliSeconds + 1000;
       myData.effectState = 3; // delay
-      break;      
-      
+      break;
+
     case 3: // delay
       if (currentMilliSeconds >= myData.effectDelay) myData.effectState = 2;
       break;
-      
+
     default: // state has been lost so end effect
     case 1: // end effect and release memory
       FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
@@ -535,9 +548,9 @@ bool CylonBounceEffect (effectData &myData) {
       } else {
         setPixel(eyeRightEdge, 0, 0, 0, 0, false); // turn off pixel away from which eye will move.
       }
-      
+
       myData.effectVar[1] += myData.effectVar[0]; // move eye start to next pixel
-      
+
       // Display eye in new locatipon
       eyeLeftEdge = myData.effectVar[1];
       eyeLeftCore = eyeLeftEdge + myData.intParam[2];
@@ -546,7 +559,7 @@ bool CylonBounceEffect (effectData &myData) {
       FillPixels(eyeLeftEdge, eyeLeftCore - 1, myData.r / 5, myData.g / 5, myData.b / 5, myData.w / 5, false); // dim
       FillPixels(eyeLeftCore, eyeRightCore, myData.r, myData.g, myData.b, myData.w, false);  // bright
       FillPixels(eyeRightCore + 1, eyeRightEdge, myData.r / 5, myData.g / 5, myData.b / 5, myData.w / 5, false); // dim
-      
+
       // Figure out how long to wait for
       if ((eyeRightEdge >= myData.lastPixel) || (eyeLeftEdge <= myData.firstPixel)) { // have we hit edge?
         myData.effectDelay = currentMilliSeconds + myData.intParam[3]; // pause at end
@@ -1430,7 +1443,7 @@ bool BouncingBallsEffect (effectData &myData) {
   const static float Gravity = -9.81;
   const static int StartHeight = 1;
   const static float ImpactVelocityStart = sqrt( -2 * Gravity * StartHeight );
-  
+
   switch (myData.effectState) {
     case 0: // init or startup
       if (myData.intParam[1] < 1) myData.intParam[1] = 1;
@@ -1656,7 +1669,7 @@ bool LightingingEffect (effectData &myData) {
   int strikeLength = myData.effectVar[2] - myData.effectVar[1] + 1;
   unsigned int i;
   byte r,g,b,w, dimmer;
-  
+
   switch (myData.effectState) {
     case 0: // init or startup
       myData.effectVar[0] = random(3,8); // Dimmer prestrikes left
@@ -1683,7 +1696,7 @@ bool LightingingEffect (effectData &myData) {
         myData.effectState = 3; // display bright flash
       }
       break;
-      
+
     case 3: // Display bright flash
         myData.effectVar[3] = 1; // lights on
         myData.effectVar[0] = random(3,8); // Dimmer prestrikes left for next strike
@@ -1700,13 +1713,13 @@ bool LightingingEffect (effectData &myData) {
         myData.effectState = 5; // delay off dim
       }
       break;
-      
+
     case 5: // delay off
       if (currentMilliSeconds >= myData.effectDelay) {
         myData.effectState = 2; // display dim
       }
       break;
-      
+
     case 6: // delay on bright
       if (currentMilliSeconds >= myData.effectDelay) {
         FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
@@ -1714,7 +1727,7 @@ bool LightingingEffect (effectData &myData) {
         myData.effectState = 5; // delay off dim
       }
       break;
-      
+
     default: // state has been lost so end effect
     case 1: // end effect and release memory
       FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);

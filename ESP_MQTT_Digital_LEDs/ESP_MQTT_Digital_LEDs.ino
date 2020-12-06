@@ -43,19 +43,19 @@ const char* lwtMessage = "offline";
 byte realRed = 0;
 byte realGreen = 0;
 byte realBlue = 0;
-byte realWhite = 255;
+byte realWhite = 50;
 
 // Previous requested values
 byte previousRed = 0;
 byte previousGreen = 0;
 byte previousBlue = 0;
-byte previousWhite = 0;
+byte previousWhite = 50;
 
 // Values as sent to strip (effected by brightness setting)
 byte red = 0;
 byte green = 0;
 byte blue = 0;
-byte white = 0;
+byte white = 50;
 int brightness = 255;
 String previousEffect = "solid";
 //String effect = "solid";
@@ -192,12 +192,11 @@ void setup() {
   // Turn on power supply for LED strips. Controller runs on standby power from power supply
   pinMode(10, OUTPUT);
   digitalWrite(10, HIGH);
-  
+
   strcpy (effect, "solid"); // init effect variable
 
   for (i = 0; i < NUMSTRIPS; i++)
   {
-    // End of trinket special code
     pixelStrings[i].setBrightness(maxBrightness);
     pixelStrings[i].begin();
     pixelStrings[i].show(); // Initialize all pixels to 'off'
@@ -222,9 +221,10 @@ void setup() {
     effectQueue[i].applyBrightness = false;
     effectQueue[i].effectState = 0;  // State 0 is alway init, allocate memory, set defaults
   }
-  
+
   // client.setServer(MQTT_SERVER, MQTT_PORT);
   // client.setCallback(mqttCallback);
+  FillPixels(0,lastPixel, red, green, blue, white, true);
   if (debugPrint) {
     Serial.println();
     Serial.println(F("Ready"));
@@ -308,8 +308,8 @@ void printState() {
     Serial.print(F(" g:")); Serial.print(green); Serial.print("/"); Serial.print(realGreen);
     Serial.print(F(" b:")); Serial.print(blue); Serial.print("/"); Serial.print(realBlue);
     Serial.print(F(" w:")); Serial.print(white); Serial.print("/"); Serial.print(realWhite);
-    Serial.print(F(" e:")); Serial.print(effect);
-    Serial.print(F(" fp:")); Serial.print(firstPixel);
+    Serial.print(F(" e:'")); Serial.print(effect);
+    Serial.print(F("' fp:")); Serial.print(firstPixel);
     Serial.print(F(" lp:")); Serial.print(lastPixel);
     Serial.print(F(" p1:")); Serial.print(effectParameter[0]);
     Serial.print(F(" p2:")); Serial.print(effectParameter[1]);
@@ -326,12 +326,39 @@ void printState() {
 }
 
 void printQueueState() {
+  int i;
   if (debugPrint) {
     Serial.print(F("Active Effects:"));
     Serial.println(activeEffects);
+    for (i=0; i < effectQueueSize; ++i) {
+      if (effectQueue[i].slotActive) {
+        Serial.print("["); Serial.print(i); Serial.print("] ");
+        Serial.print(F(" r:")); Serial.print(effectQueue[i].r);
+        Serial.print(F(" g:")); Serial.print(effectQueue[i].g);
+        Serial.print(F(" b:")); Serial.print(effectQueue[i].b);
+        Serial.print(F(" w:")); Serial.print(effectQueue[i].w);
+        Serial.print(F(" e:'")); Serial.print(effectQueue[i].effectName);
+        Serial.print(F("' fp:")); Serial.print(effectQueue[i].firstPixel);
+        Serial.print(F(" lp:")); Serial.print(effectQueue[i].lastPixel);
+        Serial.print(F(" p1:")); Serial.print(effectQueue[i].intParam[0]);
+        Serial.print(F(" p2:")); Serial.print(effectQueue[i].intParam[1]);
+        Serial.print(F(" p3:")); Serial.print(effectQueue[i].intParam[2]);
+        Serial.print(F(" p4:")); Serial.print(effectQueue[i].intParam[3]);
+        Serial.print(F(" v1:")); Serial.print(effectQueue[i].effectVar[0]);
+        Serial.print(F(" v2:")); Serial.print(effectQueue[i].effectVar[1]);
+        Serial.print(F(" v3:")); Serial.print(effectQueue[i].effectVar[2]);
+        Serial.print(F(" v4:")); Serial.print(effectQueue[i].effectVar[3]);
+        Serial.print(F(" v5:")); Serial.print(effectQueue[i].effectVar[4]);
+        Serial.print(F(" effectMemory==NULL:")); Serial.print(effectQueue[i].effectMemory == NULL);
+
+        Serial.print(F(" ov:")); Serial.print(effectQueue[i].isOverlay);
+        Serial.print(F(" state:")); Serial.print(effectQueue[i].effectState);
+        Serial.println();  
+      }
+    }
   }
 }
-  
+
 /*
   SAMPLE PAYLOAD:
   {
@@ -424,7 +451,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
           stateOn = false;
           setOff();
         }
-      } 
+      }
       else if (!strcmp("color", theKey)) {
         realRed = root["color"]["r"];
         realGreen = root["color"]["g"];
@@ -438,7 +465,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         white = map(realWhite, 0, 255, 0, brightness);
       }
       else if (!strcmp("effect", theKey)) {
-        strcpy(effect, p.value().as<char*>()); 
+        strcpy(effect, p.value().as<char*>());
         effectStart = true;
       }
       else if (!strcmp("firstPixel", theKey))  firstPixel = p.value();
@@ -472,7 +499,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     previousRed = red;
     previousGreen = green;
     previousBlue = blue;
-    previousWhite = white;    
+    previousWhite = white;
     sendState();  // This will overwrite topic* and payload* buffers.
     printState();
   }
@@ -600,7 +627,7 @@ void loop() {
   static int cmdState = 0;
   static char cmdBuffer[50];
   static int cmdIndex = 0;
-  
+
   /*
   if ((WiFi.status() != WL_CONNECTED) || !wifiSeen) {
     //    delay(1);
@@ -629,11 +656,11 @@ void loop() {
       cmdState = 1; // poll for input
       Serial.print(F("CMD: "));
       break;
-      
+
     case 1:
       if( Serial.available()) {
         char rcvd = Serial.read();
-        if (rcvd == 10) { // new line 
+        if (rcvd == 10) { // new line
           cmdBuffer[cmdIndex] = 0; // terminating zero for string
           cmdState = 2; // decode command
         } else if (rcvd == 13) { // new line or carrage return
@@ -650,7 +677,7 @@ void loop() {
       //  Serial.print(".");
       }
       break;
-    
+
     case 2: // decode command
       Serial.print("Got:");
       Serial.println(cmdBuffer);
@@ -689,8 +716,8 @@ void loop() {
         realRed = ri;  realGreen = gi; realBlue = bi; realWhite = wi;
         red = map(realRed, 0, 255, 0, brightness);
         green = map(realGreen, 0, 255, 0, brightness);
-        blue = map(realBlue, 0, 255, 0, brightness);    
-        white = map(realWhite, 0, 255, 0, brightness);  
+        blue = map(realBlue, 0, 255, 0, brightness);
+        white = map(realWhite, 0, 255, 0, brightness);
       }
       else if (0 == strncmp("br", cmdBuffer, 2)) { //
         sscanf (cmdBuffer+2, "%d", &brightness);
@@ -704,7 +731,7 @@ void loop() {
       else if (0 == strncmp("g", cmdBuffer, 1)) { //
         int gi;
         sscanf (cmdBuffer+1, "%d", &gi);
-        realGreen = gi;  
+        realGreen = gi;
         green = map(realGreen, 0, 255, 0, brightness);
       }
       else if (0 == strncmp("b", cmdBuffer, 1)) { //
@@ -749,16 +776,86 @@ void loop() {
       }
       else if (0 == strncmp("?", cmdBuffer, 1)) { //
         //printHelp();
-      } else { 
+      }
+      else if (0 == strncmp("z", cmdBuffer, 1)) { // zone macros for areas of strip
+        int zone = 0;
+        sscanf (cmdBuffer+1, "%d", &zone);
+        switch (zone) {
+          default:
+          case 0: // default do nothing
+            break;
+            
+          case 1: // Main Room
+            firstPixel = vStartMr;
+            lastPixel  = vEndMr;
+            break;
+            
+          case 2: // Kitchen
+            firstPixel = vStartKt;
+            lastPixel  = vEndKt;
+            break;
+            
+          case 3: // Bed Room
+            firstPixel = vStartBr;
+            lastPixel  = vEndBr;
+            break;
+            
+          case 4: // Above Computer
+            firstPixel = 450;
+            lastPixel  = 550;
+            break;
+            
+          case 5: // Main Room
+            firstPixel = 10;
+            lastPixel  = 20;
+            break;
+            
+          case 6: // Main Room
+            firstPixel = 30;
+            lastPixel  = 40;
+            break;
+            
+          case 7: // Main Room
+            firstPixel = 12;
+            lastPixel  = 18;
+            break;
+            
+          case 8: // Main Room
+            firstPixel = 32;
+            lastPixel  = 38;
+            break;
+        }
+      } else {
         Serial.println("???");
       }
       effectStart = effectStart || effectEdit || effectNew;
       effectNew = false;
       printState();
-      break; 
+      break;
   }
-    
-  
+  if ((!strcmp(effect, "no effect")) && effectStart){
+    // special handling to enable removal of base and overlay effects from the queue
+    for (i=0; i < effectQueueSize; ++i) {
+      if (effectQueue[i].slotActive) {
+        // See if new effect overlaps any running effects. If so terminate them gracefully.
+        if (insideRange (firstPixel, effectQueue[i].firstPixel, effectQueue[i].lastPixel) ||
+           insideRange (lastPixel, effectQueue[i].firstPixel, effectQueue[i].lastPixel) ||
+           insideRange (effectQueue[i].firstPixel,firstPixel, lastPixel) ||
+           insideRange (effectQueue[i].lastPixel, firstPixel, lastPixel) )
+        {
+          if (effectQueue[i].isOverlay == effectIsOverlay) {
+            // only remove effects that match current effectIsOverlay, this is how to remove overlay effects.
+            // It overlaps so request it to terminate on next itteration.
+            effectQueue[i].effectState = 1; // request termination
+            Serial.print ("Request effect slot ["); Serial.print(i); Serial.print("] stop: ");
+            Serial.println(effectQueue[i].effectName);
+          }
+        }
+      }
+    }
+    effectStart = false; // Don't fill an effect slot with noEffect effect.
+  }
+
   effectRan = false; // note if we have to ship data to strips
   if (effectStart) {
     effectStart = false;
@@ -769,7 +866,7 @@ void loop() {
           if (insideRange (firstPixel, effectQueue[i].firstPixel, effectQueue[i].lastPixel) ||
              insideRange (lastPixel, effectQueue[i].firstPixel, effectQueue[i].lastPixel) ||
              insideRange (effectQueue[i].firstPixel,firstPixel, lastPixel) ||
-             insideRange (effectQueue[i].lastPixel, firstPixel, lastPixel) ) 
+             insideRange (effectQueue[i].lastPixel, firstPixel, lastPixel) )
           {
                bool finished;
             // It overlaps so terminate it.
@@ -786,40 +883,99 @@ void loop() {
         effectQueue[i].slotActive = true; // indicate slot is used
         effectQueue[i].firstPixel = firstPixel;   // first pixel involved in effect
         effectQueue[i].lastPixel  = lastPixel;    // last pixel involved in effect
-        effectQueue[i].r = realRed;            // What color effect should use if selectable
-        effectQueue[i].g = realGreen;            // What color effect should use if selectable
-        effectQueue[i].b = realBlue;            // What color effect should use if selectable
-        effectQueue[i].w = realWhite;            // What color effect should use if selectable
+        effectQueue[i].r = red;                   // What color effect should use if selectable
+        effectQueue[i].g = green;                 // What color effect should use if selectable
+        effectQueue[i].b = blue;                  // What color effect should use if selectable
+        effectQueue[i].w = white;                 // What color effect should use if selectable
         for (j=0; j < 4; ++j) {;
           effectQueue[i].intParam[j] = effectParameter[j];  // defined per effect
         }
         effectQueue[i].applyBrightness = false;
         effectQueue[i].effectState = 0;  // State 0 is alway init, allocate memory, set defaults
         effectQueue[i].effectPtr = NULL;
+        effectQueue[i].effectMemory = NULL;
         effectQueue[i].isOverlay = effectIsOverlay;
-        if (!strcmp(effect, "clear"))          effectQueue[i].effectPtr = ClearEffect;
-        if (!strcmp(effect, "solid"))          effectQueue[i].effectPtr = SolidEffect;
-        if (!strcmp(effect, "twinkle"))        effectQueue[i].effectPtr = TwinkleEffect;
-        if (!strcmp(effect, "cylon bounce"))   effectQueue[i].effectPtr = CylonBounceEffect;
-        if (!strcmp(effect, "fire"))           effectQueue[i].effectPtr = FireEffect;
-        if (!strcmp(effect, "fade in out"))    effectQueue[i].effectPtr = FadeInOutEffect;
-        if (!strcmp(effect, "strobe"))         effectQueue[i].effectPtr = StrobeEffect;
-        if (!strcmp(effect, "theater chase"))  effectQueue[i].effectPtr = TheaterChaseEffect;
-        if (!strcmp(effect, "rainbow cycle"))  effectQueue[i].effectPtr = RainbowCycleEffect;
-        if (!strcmp(effect, "color wipe"))     effectQueue[i].effectPtr = ColorWipeEffect;
-        if (!strcmp(effect, "running lights")) effectQueue[i].effectPtr = RunningLightsEffect;
-        if (!strcmp(effect, "snow sparkle"))   effectQueue[i].effectPtr = SnowSparkleEffect;
-        if (!strcmp(effect, "sparkle"))        effectQueue[i].effectPtr = SparkleEffect;
-        if (!strcmp(effect, "set one pixel")) effectQueue[i].effectPtr = SetOnePixelEffect;
-        if (!strcmp(effect, "twinkle random")) effectQueue[i].effectPtr = TwinkleRandomEffect;
-        if (!strcmp(effect, "bouncing balls")) effectQueue[i].effectPtr = BouncingBallsEffect;
-        if (!strcmp(effect, "lightning"))      effectQueue[i].effectPtr = LightingingEffect;
-        if (!strcmp(effect, "no effect"))      effectQueue[i].effectPtr = NoEffect;
+        if (!strcmp(effect, "clear"))          {
+          effectQueue[i].effectPtr = ClearEffect;
+          effectQueue[i].effectName = "clear";
+        } else
+        if (!strcmp(effect, "solid"))          {
+          effectQueue[i].effectPtr = SolidEffect;
+          effectQueue[i].effectName = "solid";
+        } else
+        if (!strcmp(effect, "twinkle"))        {
+          effectQueue[i].effectPtr = TwinkleEffect;
+          effectQueue[i].effectName = "twinkle";
+        } else
+        if (!strcmp(effect, "cylon bounce"))   {
+          effectQueue[i].effectPtr = CylonBounceEffect;
+          effectQueue[i].effectName = "cylon bounce";
+        } else
+        if (!strcmp(effect, "fire"))           {
+          effectQueue[i].effectPtr = FireEffect;
+          effectQueue[i].effectName = "fire";
+        } else
+        if (!strcmp(effect, "fade in out"))    {
+          effectQueue[i].effectPtr = FadeInOutEffect;
+          effectQueue[i].effectName = "fade in out";
+        } else
+        if (!strcmp(effect, "strobe"))         {
+          effectQueue[i].effectPtr = StrobeEffect;
+          effectQueue[i].effectName = "strobe";
+        } else
+        if (!strcmp(effect, "theater chase"))  {
+          effectQueue[i].effectPtr = TheaterChaseEffect;
+          effectQueue[i].effectName = "theater chase";
+        } else
+        if (!strcmp(effect, "rainbow cycle"))  {
+          effectQueue[i].effectPtr = RainbowCycleEffect;
+          effectQueue[i].effectName = "rainbow cycle";
+        } else
+        if (!strcmp(effect, "color wipe"))     {
+          effectQueue[i].effectPtr = ColorWipeEffect;
+          effectQueue[i].effectName = "color wipe";
+        } else
+        if (!strcmp(effect, "running lights")) {
+          effectQueue[i].effectPtr = RunningLightsEffect;
+          effectQueue[i].effectName = "running lights";
+        } else
+        if (!strcmp(effect, "snow sparkle"))   {
+          effectQueue[i].effectPtr = SnowSparkleEffect;
+          effectQueue[i].effectName = "snow sparkle";
+        } else
+        if (!strcmp(effect, "sparkle"))        {
+          effectQueue[i].effectPtr = SparkleEffect;
+          effectQueue[i].effectName = "sparkle";
+        } else
+        if (!strcmp(effect, "set one pixel"))  {
+          effectQueue[i].effectPtr = SetOnePixelEffect;
+          effectQueue[i].effectName = "set one pixel";
+        } else
+        if (!strcmp(effect, "twinkle random")) {
+          effectQueue[i].effectPtr = TwinkleRandomEffect;
+          effectQueue[i].effectName = "twinkle random";
+        } else
+        if (!strcmp(effect, "bouncing balls")) {
+          effectQueue[i].effectPtr = BouncingBallsEffect;
+          effectQueue[i].effectName = "bouncing balls";
+        } else
+        if (!strcmp(effect, "lightning"))      {
+          effectQueue[i].effectPtr = LightingingEffect;
+          effectQueue[i].effectName = "lightning";
+        } else
+        if (!strcmp(effect, "no effect"))      {
+          effectQueue[i].effectPtr = NoEffect;
+          effectQueue[i].effectName = "no effect";
+        } else {
+          Serial.print("Unknown effect: "); Serial.println(effect);
+          effectQueue[i].slotActive = false; // release slot
+        }
+
         break;
       }
     }
   }
-  
+
   // Give all running effects in queue an itteration
   activeEffects = 0;
   for (i=0; i < effectQueueSize; ++i) {
@@ -841,7 +997,7 @@ void loop() {
         effectQueue[i].slotActive = false; // indicate slot is used
        }
     }
-  } 
+  }
   if (effectRan) {
     showStrip();
     effectRan = false;
