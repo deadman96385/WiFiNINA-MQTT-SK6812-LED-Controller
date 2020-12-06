@@ -814,6 +814,7 @@ void loop() {
         if (!strcmp(effect, "twinkle random")) effectQueue[i].effectPtr = TwinkleRandomEffect;
         if (!strcmp(effect, "bouncing balls")) effectQueue[i].effectPtr = BouncingBallsEffect;
         if (!strcmp(effect, "lightning"))      effectQueue[i].effectPtr = LightingingEffect;
+        if (!strcmp(effect, "no effect"))      effectQueue[i].effectPtr = NoEffect;
         break;
       }
     }

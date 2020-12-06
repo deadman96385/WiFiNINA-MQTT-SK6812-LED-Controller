@@ -1646,7 +1646,7 @@ void Fade(int SpeedDelay) {
 }
 */
 
-// Bouncing balls effect. Should return true if effect has finished, false if effect wants more itterations
+// Lightning effect. Should return true if effect has finished, false if effect wants more itterations
 bool LightingingEffect (effectData &myData) {
   // intParam[0] is delay multiplier between lighting strikes // always use [0] for delay setting
   // intParam[1] is how many strikes to do
@@ -1660,25 +1660,25 @@ bool LightingingEffect (effectData &myData) {
   switch (myData.effectState) {
     case 0: // init or startup
       myData.effectVar[0] = random(3,8); // Dimmer prestrikes left
-      myData.effectVar[1] = random(0,10); // prestrike start
-      myData.effectVar[2] = random(10,ledCount); // prestrike end
+      myData.effectVar[1] = 0; // prestrike start
+      myData.effectVar[2] = 0; // prestrike end
       FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       myData.effectState = 2; // dim delay
       break;
 
     case 2: // Display dim flash
       if (--myData.effectVar[0] > 0) { // more dim flashes left
-        myData.effectVar[1] = random(0,10); // prestrike start
-        myData.effectVar[2] = random(10,ledCount); // prestrike end
+        myData.effectVar[1] = random(0,10) + myData.firstPixel; // prestrike start
+        myData.effectVar[2] = random(10,ledCount) + myData.firstPixel; // prestrike end
         myData.effectVar[3] = 1; // lights on
-        dimmer = random(10,brightness);
+        dimmer = random(10,brightness/4);
         r = map(red, 0, 255, 0, dimmer);
         g = map(green, 0, 255, 0, dimmer);
         b = map(blue, 0, 255, 0, dimmer);
         w = map(white, 0, 255, 0, dimmer);
         FillPixels (myData.effectVar[1], myData.effectVar[2], r, g, b, w, false);
         myData.effectDelay = currentMilliSeconds + random(4,15);
-        myData.effectState = 4; // dim on delay       
+        myData.effectState = 4; // dim on delay
       } else {
         myData.effectState = 3; // display bright flash
       }
@@ -1695,7 +1695,7 @@ bool LightingingEffect (effectData &myData) {
 
     case 4: // delay on dim
       if (currentMilliSeconds >= myData.effectDelay) {
-        FillPixels (myData.effectVar[1], myData.effectVar[2], 0, 0, 0, 0, false);
+        //FillPixels (myData.effectVar[1], myData.effectVar[2], 0, 0, 0, 0, false);
         myData.effectDelay = currentMilliSeconds + 50 + random(100);
         myData.effectState = 5; // delay off dim
       }
@@ -1705,6 +1705,7 @@ bool LightingingEffect (effectData &myData) {
       if (currentMilliSeconds >= myData.effectDelay) {
         myData.effectState = 2; // display dim
       }
+      break;
       
     case 6: // delay on bright
       if (currentMilliSeconds >= myData.effectDelay) {
