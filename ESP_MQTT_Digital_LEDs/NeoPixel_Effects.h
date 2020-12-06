@@ -1660,11 +1660,15 @@ void Fade(int SpeedDelay) {
 */
 
 // Lightning effect. Should return true if effect has finished, false if effect wants more itterations
+// Lightning works by starting in middle of range with some randomness and putting up a dim flash.
+// Each following dim flash will use more of the range.
+// After all dim passes there will be 1 bright flash and then effect will restart
 bool LightingingEffect (effectData &myData) {
-  // intParam[0] is delay multiplier between lighting strikes // always use [0] for delay setting
-  // intParam[1] is how many strikes to do
+  // intParam[0] is delay scaler between dim lighting strikes // always use [0] for delay setting
+  // intParam[1] is delay scaler between bright strike and next dim strike
+  // intParam[2] is lower limit of dim strikes
+  // intParam[3] is upper limit of dim strikes
   bool returnValue = false;
-  int strikesLeft = myData.intParam[1];
   int ledCount = myData.lastPixel  - myData.firstPixel + 1;
   int strikeLength = myData.effectVar[2] - myData.effectVar[1] + 1;
   unsigned int i;
@@ -1672,59 +1676,76 @@ bool LightingingEffect (effectData &myData) {
 
   switch (myData.effectState) {
     case 0: // init or startup
-      myData.effectVar[0] = random(3,8); // Dimmer prestrikes left
+      myData.effectVar[0] = 0; // Dimmer prestrikes left
       myData.effectVar[1] = 0; // prestrike start
       myData.effectVar[2] = 0; // prestrike end
+      myData.effectVar[3] = 0; // dim flash growth between dim flashes
+      myData.effectVar[4] = 0; // prestrike length
       FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
-      myData.effectState = 2; // dim delay
+      myData.effectState = 2; // Dim Display
       break;
 
-    case 2: // Display dim flash
+    case 2: // Display flash
+      if (myData.effectVar[0] == 0) { // time to start next dim sequence
+        myData.effectVar[0] = random(myData.intParam[2],myData.intParam[3]+1); // Dimmer prestrikes left
+        Serial.print ("Dim flashes:"); Serial.print(myData.effectVar[0]);
+        // Bright flash is entire pixel range. Each dim flash should grown in size.
+        // Growth per flash should be (pixel range)/(dim flashes + 2)
+        // The Plus two is fudge factor so bright flash has strip to grow into and to leave
+        //   some room for random moving of dim flashes
+        myData.effectVar[3] = (myData.lastPixel - myData.firstPixel + 1)/(myData.effectVar[0] + 2);
+        Serial.print ("  Dim growth step size:"); Serial.println(myData.effectVar[3]);
+        myData.effectVar[4] = myData.effectVar[3]; // first dim flash is length of step size
+      }
+
       if (--myData.effectVar[0] > 0) { // more dim flashes left
-        myData.effectVar[1] = random(0,10) + myData.firstPixel; // prestrike start
-        myData.effectVar[2] = random(10,ledCount) + myData.firstPixel; // prestrike end
-        myData.effectVar[3] = 1; // lights on
-        dimmer = random(10,brightness/4);
-        r = map(red, 0, 255, 0, dimmer);
-        g = map(green, 0, 255, 0, dimmer);
-        b = map(blue, 0, 255, 0, dimmer);
-        w = map(white, 0, 255, 0, dimmer);
+        int pixelRange = myData.lastPixel - myData.firstPixel + 1;
+        int flashRange = myData.effectVar[4];
+        // Erase prior flash incase next flash is far enough away so as to not overlap
+        FillPixels (myData.effectVar[1], myData.effectVar[2], 0, 0, 0, 0, false);
+        // Calculate new flash
+        myData.effectVar[1] = random(0,((pixelRange-flashRange)/2)) + myData.firstPixel; // prestrike start
+        myData.effectVar[2] = myData.effectVar[1]+flashRange-1; // prestrike end
+        myData.effectVar[4] += myData.effectVar[3]; // grow next flash size.
+        // dimmer = random(10,brightness/4);
+        dimmer = brightness / 10;
+        r = map(myData.r, 0, 255, 0, dimmer);
+        g = map(myData.g, 0, 255, 0, dimmer);
+        b = map(myData.b, 0, 255, 0, dimmer);
+        w = map(myData.w, 0, 255, 0, dimmer);
         FillPixels (myData.effectVar[1], myData.effectVar[2], r, g, b, w, false);
-        myData.effectDelay = currentMilliSeconds + random(4,15);
-        myData.effectState = 4; // dim on delay
+        Serial.print (myData.effectVar[1]); Serial.print(":"); Serial.print(myData.effectVar[2]);
+        Serial.print (" - "); Serial.println(myData.effectVar[2] - myData.effectVar[1] + 1);
+        myData.effectDelay = currentMilliSeconds + random(4,15)*myData.intParam[0];
+        myData.effectState = 3; // delay dim
       } else {
-        myData.effectState = 3; // display bright flash
+        FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
+        Serial.println("Bright");
+        myData.effectDelay = currentMilliSeconds + random(4,15)*myData.intParam[0];
+        myData.effectState = 4; // delay bright
       }
       break;
 
-    case 3: // Display bright flash
-        myData.effectVar[3] = 1; // lights on
-        myData.effectVar[0] = random(3,8); // Dimmer prestrikes left for next strike
-        FillPixels (myData.firstPixel, myData.lastPixel, red, green, blue, white, false);
-        myData.effectVar[1] = myData.firstPixel;
-        myData.effectVar[2] = myData.lastPixel;
-        myData.effectDelay = currentMilliSeconds + 200;
-        myData.effectState = 6; //bright delay
-
-    case 4: // delay on dim
+    case 3: // delay on dim
       if (currentMilliSeconds >= myData.effectDelay) {
         //FillPixels (myData.effectVar[1], myData.effectVar[2], 0, 0, 0, 0, false);
-        myData.effectDelay = currentMilliSeconds + 50 + random(100);
-        myData.effectState = 5; // delay off dim
+        //myData.effectDelay = currentMilliSeconds + 50 + random(100);
+        //myData.effectState = 5; // delay off dim
+        myData.effectState = 2; // Display next flash
       }
       break;
 
     case 5: // delay off
       if (currentMilliSeconds >= myData.effectDelay) {
-        myData.effectState = 2; // display dim
+        myData.effectState = 2; // display flash
       }
       break;
 
-    case 6: // delay on bright
+    case 4: // delay on bright
       if (currentMilliSeconds >= myData.effectDelay) {
-        FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
-        myData.effectDelay = currentMilliSeconds + 200 + (random(myData.effectVar[0])*50); // bright dark
-        myData.effectState = 5; // delay off dim
+        FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);  // end flash delay for dark time
+        myData.effectDelay = currentMilliSeconds + 500 + (random(500,1000)*myData.intParam[1]); // dark time between flashes
+        myData.effectState = 5; // Delay off
       }
       break;
 
