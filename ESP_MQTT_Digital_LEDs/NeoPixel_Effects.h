@@ -193,15 +193,15 @@ bool fadeToBlack (unsigned int pixel, byte fadeValue) {
   unsigned int stripNumber = 0;
   unsigned int ledNumber = 0;
   unsigned int currentColor;
-  byte red, green, blue, white;
+  int red, green, blue, white;
   
   // Get current color
   mapPixel (pixel, stripNumber, ledNumber);
   currentColor = pixelStrings[stripNumber].getPixelColor(ledNumber);
   white = (currentColor >> 24) & 0xFF;
-  red   = (currentColor>> 16) & 0xFF;
-  green = (currentColor >> 8) & 0xFF;
-  blue  = (currentColor) & 0xFF;  
+  red   = (currentColor >> 16) & 0xFF;
+  green = (currentColor >> 8)  & 0xFF;
+  blue  = (currentColor)       & 0xFF;  
   // Do fade
   red =   (red < 10)   ? 0 : (int) red   - (red   * fadeValue / 256);
   green = (green < 10) ? 0 : (int) green - (green * fadeValue / 256);
@@ -1862,7 +1862,7 @@ void Lightning(int SpeedDelay) {
 bool MeteorRainEffect (effectData &myData) {
   // intParam[0] is delay for each movement of meteor// always use [0] for delay setting
   // intParam[1] is pixel size of meteor
-  // intParam[2] is meteor trail decay (big =  short tail)
+  // intParam[2] is meteor trail decay (big =  short tail, range 0-255)
   // intParam[3] is meteor random decay (0 = smooth, 1+ = more jagged)
   bool returnValue = false;
   unsigned int i;
@@ -1884,7 +1884,7 @@ bool MeteorRainEffect (effectData &myData) {
       // fade all lit pixels
       allBlack = true;
       for (i=myData.firstPixel; i <= myData.lastPixel; ++i) {
-        if ((myData.intParam[3] || random(10)>5)) {
+        if (((myData.intParam[3] == 0) || (random(10)>5))) {
           // fade current pixel
           allBlack &= fadeToBlack (i, myData.intParam[2]);
         }
