@@ -604,7 +604,8 @@ void printHelp() {
   Serial.print  (F("\t'theater chase'"));
   Serial.print  (F("\t'rainbow cycle'"));
   Serial.print  (F("\t'color wipe'\t"));
-  Serial.println(F("\t'running lights'"));
+  Serial.print  (F("\t'running lights'"));
+  Serial.println(F("\t'meteor rain'"));
   Serial.print  (F("\t'snow sparkle'"));
   Serial.print  (F("\t'sparkle'"));
   Serial.print  (F("\t'set one pixel'"));
@@ -962,6 +963,10 @@ void loop() {
         if (!strcmp(effect, "lightning"))      {
           effectQueue[i].effectPtr = LightingingEffect;
           effectQueue[i].effectName = "lightning";
+        } else
+        if (!strcmp(effect, "meteor rain"))      {
+          effectQueue[i].effectPtr = MeteorRainEffect;
+          effectQueue[i].effectName = "meteor rain";
         } else
         if (!strcmp(effect, "no effect"))      {
           effectQueue[i].effectPtr = NoEffect;

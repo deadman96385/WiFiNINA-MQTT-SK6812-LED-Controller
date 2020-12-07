@@ -62,6 +62,41 @@ typedef struct effectData{
   // vStartBr = 1780
   // vEndBr   = 2322
 
+// see if one pixel is inside the range of a room
+bool insideroom (unsigned int check, unsigned int first, unsigned int last) {
+  return ((first <= check) && (check <= last));
+}
+  
+void mapPixel (unsigned int virtualPixel, unsigned int &stripNumber, unsigned int &actualPixel) {
+  // Unwrap 2nd level of virtual that joins 2 segements of main room into one and slides kitched to after that segment
+  stripNumber = 0;
+  actualPixel = 0;
+  if (insideroom(virtualPixel, vStartMr, vEndMr)) {
+    if (insideroom(virtualPixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
+      virtualPixel = virtualPixel - lengthMr1 + startMr2; // offset into second part of virtual mr applied to actual mr2
+    }
+  } else if (insideroom(virtualPixel,vStartKt, vEndKt)) {
+    virtualPixel = virtualPixel - vStartKt + startKt; // offset into virutal kitchen applied to real kitchen range
+  }
+
+  // Now need to unmap 1 large virtual strip into individual real strips
+  // Find the correct strip to work with out of virtual all led strip
+  for (int i = 0; i < NUMSTRIPS; i++) {
+    if ((virtualPixel >= stripStart[i]) && (virtualPixel <= stripEnd[i])) {
+      stripNumber = i;
+      break; // found strip so don't check rest
+    }
+  }
+
+  // Find the correct LED in the selected strip
+  if (stripReversed[stripNumber]) { // is strip reversed?
+    actualPixel = stripEnd[stripNumber] - virtualPixel; // offset from end
+  } else {
+    actualPixel = virtualPixel - stripStart[stripNumber]; // offset from start
+  }
+  actualPixel = constrain (actualPixel, 0, LED_COUNT_MAXIMUM);
+}
+
 ///**************************** START EFFECTS *****************************************/
 // Effects from: https://www.tweaking4all.com/hardware/arduino/adruino-led-strip-effects/
 
@@ -85,11 +120,6 @@ void showStrip() {
   showDirty();
 }
 
-// see if one pixel is inside the range of a room
-bool insideroom (unsigned int check, unsigned int first, unsigned int last) {
-  return ((first <= check) && (check <= last));
-}
-
 /*!
    @brief   Set virtual pixel to given color.
    @param   pixel which pixel across entire virtual strip to set (uint)
@@ -108,9 +138,12 @@ void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrig
     w = map(w, 0, 255, 0, brightness);
   }
 
-  int stripNumber = 0;
-  int ledNumber = 0;
+  unsigned int stripNumber = 0;
+  unsigned int ledNumber = 0;
 
+  // translate from virutal pixel number to physical strip information
+  mapPixel(pixel, stripNumber, ledNumber);
+  /*
   if (insideroom(pixel, vStartMr, vEndMr)) {
     if (insideroom(pixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
       pixel = pixel - lengthMr1 + startMr2; // offset into second part of virtual mr applied to actual mr2
@@ -134,12 +167,48 @@ void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrig
     ledNumber = pixel - stripStart[stripNumber]; // offset from start
   }
   ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
-
+  */
   // Note the strip is dirty because we set a value in it and updating is needed
   stripDirty[stripNumber] = true;
 
   // Actually set the pixel in the strip
   pixelStrings[stripNumber].setPixelColor(ledNumber, r, g, b, w); // faster to not build packed color word
+}
+
+void getPixelColor(unsigned int pixel, byte &red, byte &green, byte &blue, byte &white) {
+  unsigned int stripNumber = 0;
+  unsigned int ledNumber = 0;
+  unsigned int currentColor;
+  
+  mapPixel (pixel, stripNumber, ledNumber);
+  currentColor = pixelStrings[stripNumber].getPixelColor(ledNumber);
+  white = (currentColor >> 24) & 0xFF;
+  red   = (currentColor>> 16) & 0xFF;
+  green = (currentColor >> 8) & 0xFF;
+  blue  = (currentColor) & 0xFF;
+}
+
+// fade given pixel by ratio of fade value. Return true if pixel became black else return false;
+bool fadeToBlack (unsigned int pixel, byte fadeValue) {
+  unsigned int stripNumber = 0;
+  unsigned int ledNumber = 0;
+  unsigned int currentColor;
+  byte red, green, blue, white;
+  
+  // Get current color
+  mapPixel (pixel, stripNumber, ledNumber);
+  currentColor = pixelStrings[stripNumber].getPixelColor(ledNumber);
+  white = (currentColor >> 24) & 0xFF;
+  red   = (currentColor>> 16) & 0xFF;
+  green = (currentColor >> 8) & 0xFF;
+  blue  = (currentColor) & 0xFF;  
+  // Do fade
+  red =   (red < 10)   ? 0 : (int) red   - (red   * fadeValue / 256);
+  green = (green < 10) ? 0 : (int) green - (green * fadeValue / 256);
+  blue =  (blue < 10)  ? 0 : (int) blue  - (blue  * fadeValue / 256);
+  white = (white < 10) ? 0 : (int) white - (white * fadeValue / 256);
+  pixelStrings[stripNumber].setPixelColor(ledNumber, red, green, blue, white); // faster to not build packed color word
+  return ((red == 0) && (blue == 0) && (green == 0) && (white == 0));
 }
 
 void correctPixel (unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
@@ -152,9 +221,12 @@ void correctPixel (unsigned int pixel, byte r, byte g, byte b, byte w, bool appl
     w = map(w, 0, 255, 0, brightness);
   }
 
-  int stripNumber = 0;
-  int ledNumber = 0;
+  unsigned int stripNumber = 0;
+  unsigned int ledNumber = 0;
+  
+  mapPixel(pixel, stripNumber, ledNumber);
 
+  /*
   if (insideroom(pixel, vStartMr, vEndMr)) {
     if (insideroom(pixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
       pixel = pixel - lengthMr1 + startMr2; // offset into second part of virtual mr applied to actual mr2
@@ -178,7 +250,8 @@ void correctPixel (unsigned int pixel, byte r, byte g, byte b, byte w, bool appl
     ledNumber = pixel - stripStart[stripNumber]; // offset from start
   }
   ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
-
+  */
+  
   currentColor = pixelStrings[stripNumber].getPixelColor(ledNumber);
   currentWhite = (currentColor >> 24) & 0xFF;
   currentRed   = (currentColor>> 16) & 0xFF;
@@ -1784,6 +1857,70 @@ void Lightning(int SpeedDelay) {
   delay(random(SpeedDelay) * 50);        // delay between strikes
 }
 */
+
+// MeteorRain effect. Should return true if effect has finished, false if effect wants more itterations
+bool MeteorRainEffect (effectData &myData) {
+  // intParam[0] is delay for each movement of meteor// always use [0] for delay setting
+  // intParam[1] is pixel size of meteor
+  // intParam[2] is meteor trail decay (big =  short tail)
+  // intParam[3] is meteor random decay (0 = smooth, 1+ = more jagged)
+  bool returnValue = false;
+  unsigned int i;
+  unsigned int meteorHeadStop, meteorHeadStart;
+  bool allBlack;
+
+  switch (myData.effectState) {
+    case 0: // init or startup
+      myData.effectVar[0] = myData.firstPixel; // start of head of meteor
+      myData.effectVar[1] = 0; // unused
+      myData.effectVar[2] = 0; // unused
+      myData.effectVar[3] = 0; // unused
+      myData.effectVar[4] = 0; // unused
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      myData.effectState = 2; // Display
+      break;
+
+    case 2: // Display meteor
+      // fade all lit pixels
+      allBlack = true;
+      for (i=myData.firstPixel; i <= myData.lastPixel; ++i) {
+        if ((myData.intParam[3] || random(10)>5)) {
+          // fade current pixel
+          allBlack &= fadeToBlack (i, myData.intParam[2]);
+        }
+      }
+      
+      // Draw meteor
+      meteorHeadStart = myData.effectVar[0];
+      if (meteorHeadStart < myData.lastPixel) {
+        meteorHeadStop = meteorHeadStart + myData.intParam[1];
+        if (meteorHeadStop > myData.lastPixel) 
+          meteorHeadStop = myData.lastPixel;
+        FillPixels(meteorHeadStart, meteorHeadStop, myData.r, myData.g, myData.b, myData.w, false);
+        ++myData.effectVar[0]; // advance meteor head
+      } else if (allBlack) {
+        // Meteor head is past end of pixel range and all faded pixels were black so start new meteor
+        myData.effectVar[0] = 0;
+      }
+      myData.effectDelay = currentMilliSeconds + myData.intParam[0];
+      myData.effectState = 3; // Delay 
+      break;
+
+    case 3: // delay on dim
+      if (currentMilliSeconds >= myData.effectDelay) {
+        myData.effectState = 2; // Display next frame
+      }
+      break;
+
+    default: // state has been lost so end effect
+    case 1: // end effect and release memory
+      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
+      returnValue = true;
+  }
+  return returnValue; // true if effect is finished. False for more itterations.
+}
+
+
 /*
 void ShowPixels() {
   // If there are only 2 items in the array then we are setting from and to othersise set each led in the array.
