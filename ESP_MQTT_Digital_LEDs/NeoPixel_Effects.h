@@ -208,6 +208,8 @@ bool fadeToBlack (unsigned int pixel, byte fadeValue) {
   blue =  (blue < 10)  ? 0 : (int) blue  - (blue  * fadeValue / 256);
   white = (white < 10) ? 0 : (int) white - (white * fadeValue / 256);
   pixelStrings[stripNumber].setPixelColor(ledNumber, red, green, blue, white); // faster to not build packed color word
+  // Note the strip is dirty because we set a value in it and updating is needed
+  stripDirty[stripNumber] = true;
   return ((red == 0) && (blue == 0) && (green == 0) && (white == 0));
 }
 
