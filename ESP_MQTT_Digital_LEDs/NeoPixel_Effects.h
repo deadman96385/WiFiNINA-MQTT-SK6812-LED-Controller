@@ -1515,19 +1515,24 @@ typedef struct bouncingBallsData {
   int   Position;
   long  ClockTimeSinceLastBounce;
   float Dampening;
+  byte r,g,b,w;
 } bouncingBallData;
 
 // Bouncing balls effect. Should return true if effect has finished, false if effect wants more itterations
 bool BouncingBallsEffect (effectData &myData) {
   // intParam[0] is delay between updates, may want 0 // always use [0] for delay setting
   // intParam[1] is how many balls to bounce
+  // intParam[2] is color style. (0=all balls to given color, 1=random fixed color, 2=rainbow color of ball, 3+=0)
+  // intParam[3] is background white color
   bool returnValue = false;
+  byte backgroundWhite = myData.intParam[3];
   bouncingBallData * ballData = (bouncingBallData *)myData.effectMemory; // cast void pointer to correct type
   int ballCount = myData.intParam[1];
   int ledCount = myData.lastPixel  - myData.firstPixel + 1;
   const static float Gravity = -9.81;
   const static int StartHeight = 1;
   const static float ImpactVelocityStart = sqrt( -2 * Gravity * StartHeight );
+  byte wheelPos, increasing, decreasing;
 
   switch (myData.effectState) {
     case 0: // init or startup
@@ -1538,10 +1543,10 @@ bool BouncingBallsEffect (effectData &myData) {
       // grab memory for each ball to be bounced
       myData.effectMemory = (void *)malloc(ballCount * sizeof(bouncingBallData));
       ballData = (bouncingBallData *)myData.effectMemory; // update since we just allocated memory
-      FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);
       if (myData.effectMemory == NULL) {
         returnValue = true; // no memory to do effect
       } else { // set up balls
+        FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, backgroundWhite, false);
         for (int i = 0 ; i < ballCount ; i++) {
           ballData[i].ClockTimeSinceLastBounce = millis();
           ballData[i].Height = StartHeight;
@@ -1549,6 +1554,27 @@ bool BouncingBallsEffect (effectData &myData) {
           ballData[i].ImpactVelocity = ImpactVelocityStart;
           ballData[i].TimeSinceLastBounce = 0;
           ballData[i].Dampening = 0.90 - float(i) / pow(ballCount, 2);
+          switch (myData.intParam[2]) {
+            default:
+            case 0: // solid of given color
+              ballData[i].r = myData.r;
+              ballData[i].g = myData.g;
+              ballData[i].b = myData.b;
+              ballData[i].w = myData.w;
+              break;
+              
+            case 1: // solid of a random color
+              ballData[i].r = random(0,11)*25;
+              ballData[i].g = random(0,11)*25;
+              ballData[i].b = random(0,11)*25;
+              ballData[i].w = random(0,11)*25;       
+              break;
+
+            case 2: // rainbow with random start point
+              // use the ball data w slot as the wheel position on the rainbow.
+              ballData[i].w = random(0,255);     
+              break;              
+          }
         }
       }
       myData.effectState = 2; // display effect
@@ -1556,7 +1582,7 @@ bool BouncingBallsEffect (effectData &myData) {
 
     case 2: // Display data
       for (int i = 0 ; i < ballCount ; i++) {
-        setPixel(ballData[i].Position, 0, 0, 0, 0, false);
+        setPixel(ballData[i].Position, 0, 0, 0, backgroundWhite, false);
         ballData[i].TimeSinceLastBounce =  millis() - ballData[i].ClockTimeSinceLastBounce;
         ballData[i].Height  = 0.5 * Gravity * pow( ballData[i].TimeSinceLastBounce / 1000 , 2.0 ) + ballData[i].ImpactVelocity * ballData[i].TimeSinceLastBounce / 1000;
 
@@ -1570,7 +1596,29 @@ bool BouncingBallsEffect (effectData &myData) {
           }
         }
         ballData[i].Position = round( ballData[i].Height * (ledCount - 1) / StartHeight) + myData.firstPixel;
-        setPixel(ballData[i].Position, myData.r, myData.g, myData.b, myData.w, false);
+        // display / Update color if needed
+        switch (myData.intParam[2]) {
+          default:
+          case 0: // solid of given color
+          case 1: // solid of a random color
+            setPixel(ballData[i].Position, ballData[i].r, ballData[i].g, ballData[i].b, ballData[i].w, false);
+            break;
+
+          case 2: // rainbow with random start point
+            // Calculate color wheel position by taking current pixel location within the frame of a rainbow
+            wheelPos = ballData[i].w;
+            increasing = wheelPos * 3; // overflow of byte is expected and desired.
+            decreasing = 255 - increasing;
+            if (wheelPos <= 85) {
+              setPixel(i, increasing, decreasing, 0, backgroundWhite, false);
+            } else if (wheelPos <= 170) {
+              setPixel(i, decreasing, 0, increasing, backgroundWhite, false);
+            } else {
+              setPixel(i, 0, increasing, decreasing, backgroundWhite, false);
+            }
+            ++ballData[i].w;
+            break;
+        }        
       }
       break;
 
