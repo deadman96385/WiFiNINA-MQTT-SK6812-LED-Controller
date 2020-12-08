@@ -5,7 +5,7 @@
 // to the structure. One filed effect_mem is a pointer to which malloced memory can be attached if larger arrays
 // are needed.
 
-typedef struct effectData{
+typedef struct effectData {
   bool slotActive;           // Does this slot in the queue have an active effect in it?
   bool isOverlay;            // Does this effect expect to appear infront of other effects?
   bool (*effectPtr)(effectData&); // used by management to remember which effect owns this data
@@ -26,56 +26,56 @@ typedef struct effectData{
   char *effectName;
 } effectData;
 
-  // Mainroom lights are pixels 0-421 and 612-1379
-  // Kitchen lights are pixels 422-1199
-  // Bedroom lights are pixels 1380-2323
-  // Need to virtualy remap main room to one continous range
-  //   Lengths of segments of the LED strip of interest (Mr is main room, Kt is Kitchen, Br is Bedroom
-  #define lengthMr1 422
-  #define lengthMr2 768
-  #define lengthKt 590
-  #define lengthBr 543
-  #define lengthMr (lengthMr1 + lengthMr2)
-  // lengthMR1 + lengthMR2 + lengthKt + lengthBr must equal ledCount (2323)
-  // Calculate location of segments in real strip
-  #define startMr1 0
-  #define endMr1   (startMr1 + lengthMr1 - 1)
-  #define startKt  (endMr1 + 1)
-  #define endKt    (startKt + lengthKt - 1)
-  #define startMr2 (endKt + 1)
-  #define endMr2   (startMr2 + lengthMr2 - 1)
-  #define startBr  (endMr2 + 1)
-  #define endBr    ledCount
+// Mainroom lights are pixels 0-421 and 612-1379
+// Kitchen lights are pixels 422-1199
+// Bedroom lights are pixels 1380-2323
+// Need to virtualy remap main room to one continous range
+//   Lengths of segments of the LED strip of interest (Mr is main room, Kt is Kitchen, Br is Bedroom
+#define lengthMr1 422
+#define lengthMr2 768
+#define lengthKt 590
+#define lengthBr 543
+#define lengthMr (lengthMr1 + lengthMr2)
+// lengthMR1 + lengthMR2 + lengthKt + lengthBr must equal ledCount (2323)
+// Calculate location of segments in real strip
+#define startMr1 0
+#define endMr1   (startMr1 + lengthMr1 - 1)
+#define startKt  (endMr1 + 1)
+#define endKt    (startKt + lengthKt - 1)
+#define startMr2 (endKt + 1)
+#define endMr2   (startMr2 + lengthMr2 - 1)
+#define startBr  (endMr2 + 1)
+#define endBr    ledCount
 
-  // Calculate remapped locations of rooms (so virtual strip? with contignous Mr)
-  #define vStartBr startBr
-  #define vEndBr   endBr
-  #define vStartMr 0
-  #define vEndMr   (vStartMr + lengthMr - 1)
-  #define vStartKt (vEndMr + 1)
-  #define vEndKt   (vStartKt + lengthKt - 1)
+// Calculate remapped locations of rooms (so virtual strip? with contignous Mr)
+#define vStartBr startBr
+#define vEndBr   endBr
+#define vStartMr 0
+#define vEndMr   (vStartMr + lengthMr - 1)
+#define vStartKt (vEndMr + 1)
+#define vEndKt   (vStartKt + lengthKt - 1)
 
-  // vStartMr = 0
-  // vEndMr   = 1189
-  // vStartKt = 1190
-  // vEndKt   = 1779
-  // vStartBr = 1780
-  // vEndBr   = 2322
+// vStartMr = 0
+// vEndMr   = 1189
+// vStartKt = 1190
+// vEndKt   = 1779
+// vStartBr = 1780
+// vEndBr   = 2322
 
 // see if one pixel is inside the range of a room
 bool insideroom (unsigned int check, unsigned int first, unsigned int last) {
   return ((first <= check) && (check <= last));
 }
-  
+
 void mapPixel (unsigned int virtualPixel, unsigned int &stripNumber, unsigned int &actualPixel) {
   // Unwrap 2nd level of virtual that joins 2 segements of main room into one and slides kitched to after that segment
   stripNumber = 0;
   actualPixel = 0;
   if (insideroom(virtualPixel, vStartMr, vEndMr)) {
-    if (insideroom(virtualPixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
+    if (insideroom(virtualPixel, endMr1 + 1, vEndMr)) { // in Mr2 so remap to actual pixel
       virtualPixel = virtualPixel - lengthMr1 + startMr2; // offset into second part of virtual mr applied to actual mr2
     }
-  } else if (insideroom(virtualPixel,vStartKt, vEndKt)) {
+  } else if (insideroom(virtualPixel, vStartKt, vEndKt)) {
     virtualPixel = virtualPixel - vStartKt + startKt; // offset into virutal kitchen applied to real kitchen range
   }
 
@@ -144,29 +144,29 @@ void setPixel(unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrig
   // translate from virutal pixel number to physical strip information
   mapPixel(pixel, stripNumber, ledNumber);
   /*
-  if (insideroom(pixel, vStartMr, vEndMr)) {
+    if (insideroom(pixel, vStartMr, vEndMr)) {
     if (insideroom(pixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
       pixel = pixel - lengthMr1 + startMr2; // offset into second part of virtual mr applied to actual mr2
     }
-  } else if (insideroom(pixel,vStartKt, vEndKt)) {
+    } else if (insideroom(pixel,vStartKt, vEndKt)) {
     pixel = pixel - vStartKt + startKt; // offset into virutal kitchen applied to real kitchen range
-  }
+    }
 
-  // Find the correct strip to work with out of virtual all led strip
-  for (int i = 0; i < NUMSTRIPS; i++) {
+    // Find the correct strip to work with out of virtual all led strip
+    for (int i = 0; i < NUMSTRIPS; i++) {
     if ((pixel >= stripStart[i]) && (pixel <= stripEnd[i])) {
       stripNumber = i;
       break; // found strip so don't check rest
     }
-  }
+    }
 
-  // Find the correct LED in the selected strip
-  if (stripReversed[stripNumber]) { // is strip reversed?
+    // Find the correct LED in the selected strip
+    if (stripReversed[stripNumber]) { // is strip reversed?
     ledNumber = stripEnd[stripNumber] - pixel; // offset from end
-  } else {
+    } else {
     ledNumber = pixel - stripStart[stripNumber]; // offset from start
-  }
-  ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
+    }
+    ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
   */
   // Note the strip is dirty because we set a value in it and updating is needed
   stripDirty[stripNumber] = true;
@@ -179,11 +179,11 @@ void getPixelColor(unsigned int pixel, byte &red, byte &green, byte &blue, byte 
   unsigned int stripNumber = 0;
   unsigned int ledNumber = 0;
   unsigned int currentColor;
-  
+
   mapPixel (pixel, stripNumber, ledNumber);
   currentColor = pixelStrings[stripNumber].getPixelColor(ledNumber);
   white = (currentColor >> 24) & 0xFF;
-  red   = (currentColor>> 16) & 0xFF;
+  red   = (currentColor >> 16) & 0xFF;
   green = (currentColor >> 8) & 0xFF;
   blue  = (currentColor) & 0xFF;
 }
@@ -194,23 +194,28 @@ bool fadeToBlack (unsigned int pixel, byte fadeValue) {
   unsigned int ledNumber = 0;
   unsigned int currentColor;
   int red, green, blue, white;
-  
+
   // Get current color
   mapPixel (pixel, stripNumber, ledNumber);
   currentColor = pixelStrings[stripNumber].getPixelColor(ledNumber);
-  white = (currentColor >> 24) & 0xFF;
-  red   = (currentColor >> 16) & 0xFF;
-  green = (currentColor >> 8)  & 0xFF;
-  blue  = (currentColor)       & 0xFF;  
-  // Do fade
-  red =   (red < 10)   ? 0 : (int) red   - (red   * fadeValue / 256);
-  green = (green < 10) ? 0 : (int) green - (green * fadeValue / 256);
-  blue =  (blue < 10)  ? 0 : (int) blue  - (blue  * fadeValue / 256);
-  white = (white < 10) ? 0 : (int) white - (white * fadeValue / 256);
-  pixelStrings[stripNumber].setPixelColor(ledNumber, red, green, blue, white); // faster to not build packed color word
-  // Note the strip is dirty because we set a value in it and updating is needed
-  stripDirty[stripNumber] = true;
-  return ((red == 0) && (blue == 0) && (green == 0) && (white == 0));
+  if (currentColor != 0) {
+    white = (currentColor >> 24) & 0xFF;
+    red   = (currentColor >> 16) & 0xFF;
+    green = (currentColor >> 8)  & 0xFF;
+    blue  = (currentColor)       & 0xFF;
+    // Do fade
+    red =   (red <= fadeValue)   ? 0 : (int) red   - (red   * fadeValue / 256 + 1);
+    green = (green <= fadeValue) ? 0 : (int) green - (green * fadeValue / 256 + 1);
+    blue =  (blue <= fadeValue)  ? 0 : (int) blue  - (blue  * fadeValue / 256 + 1);
+    white = (white <= fadeValue) ? 0 : (int) white - (white * fadeValue / 256 + 1);
+    pixelStrings[stripNumber].setPixelColor(ledNumber, red, green, blue, white); // faster to not build packed color word
+    // Note the strip is dirty because we set a value in it and updating is needed
+    stripDirty[stripNumber] = true;
+    return ((red == 0) && (blue == 0) && (green == 0) && (white == 0));
+  } else {
+    return true;
+  }
+
 }
 
 void correctPixel (unsigned int pixel, byte r, byte g, byte b, byte w, bool applyBrightness) {
@@ -225,38 +230,38 @@ void correctPixel (unsigned int pixel, byte r, byte g, byte b, byte w, bool appl
 
   unsigned int stripNumber = 0;
   unsigned int ledNumber = 0;
-  
+
   mapPixel(pixel, stripNumber, ledNumber);
 
   /*
-  if (insideroom(pixel, vStartMr, vEndMr)) {
+    if (insideroom(pixel, vStartMr, vEndMr)) {
     if (insideroom(pixel, endMr1+1, vEndMr)) { // in Mr2 so remap to actual pixel
       pixel = pixel - lengthMr1 + startMr2; // offset into second part of virtual mr applied to actual mr2
     }
-  } else if (insideroom(pixel,vStartKt, vEndKt)) {
+    } else if (insideroom(pixel,vStartKt, vEndKt)) {
     pixel = pixel - vStartKt + startKt; // offset into virutal kitchen applied to real kitchen range
-  }
+    }
 
-  // Find the correct strip to work with out of virtual all led strip
-  for (int i = 0; i < NUMSTRIPS; i++) {
+    // Find the correct strip to work with out of virtual all led strip
+    for (int i = 0; i < NUMSTRIPS; i++) {
     if ((pixel >= stripStart[i]) && (pixel <= stripEnd[i])) {
       stripNumber = i;
       break; // found strip so don't check rest
     }
-  }
+    }
 
-  // Find the correct LED in the selected strip
-  if (stripReversed[stripNumber]) { // is strip reversed?
+    // Find the correct LED in the selected strip
+    if (stripReversed[stripNumber]) { // is strip reversed?
     ledNumber = stripEnd[stripNumber] - pixel; // offset from end
-  } else {
+    } else {
     ledNumber = pixel - stripStart[stripNumber]; // offset from start
-  }
-  ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
+    }
+    ledNumber = constrain (ledNumber, 0, LED_COUNT_MAXIMUM);
   */
-  
+
   currentColor = pixelStrings[stripNumber].getPixelColor(ledNumber);
   currentWhite = (currentColor >> 24) & 0xFF;
-  currentRed   = (currentColor>> 16) & 0xFF;
+  currentRed   = (currentColor >> 16) & 0xFF;
   currentGreen = (currentColor >> 8) & 0xFF;
   currentBlue  = (currentColor) & 0xFF;
   if ((currentWhite != w) || (currentRed != r) || (currentGreen != g) || (currentBlue != b)) {
@@ -295,8 +300,8 @@ void correctPixels(unsigned int firstPixel, unsigned int lastPixel, byte r, byte
 }
 
 /*
-// Example effect. Should return true if effect has finished, false if effect wants more itterations
-bool SampleEffect (effectData &myData) {
+  // Example effect. Should return true if effect has finished, false if effect wants more itterations
+  bool SampleEffect (effectData &myData) {
   // intParam[0] is delay between blinking // always use [0] for delay setting
   // intParam[1] is how many leds to blink on
   bool returnValue = false;
@@ -339,7 +344,7 @@ bool SampleEffect (effectData &myData) {
       returnValue = true;
   }
   return returnValue; // true if effect is finished. False for more itterations.
-}
+  }
 */
 
 // NoEffect effect. Should return true if effect has finished, false if effect wants more itterations
@@ -388,7 +393,7 @@ bool SolidEffect (effectData &myData) {
       break;
 
     case 2: // refresh effect;
-//      FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
+      //      FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
       correctPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w);
       myData.effectDelay = currentMilliSeconds + 100;
       myData.effectState = 3; // delay
@@ -496,7 +501,7 @@ bool TwinkleRandomEffect (effectData &myData) {
       for (i = 0; i < myData.intParam[1]; ++i) {
         j = random(myData.effectVar[1] - 1);
         effectMemory[i] = j; // build initial list of twinkles and light them
-        setPixel (j + myData.firstPixel, random(0,256), random(0,256), random(0,256), 0, myData.applyBrightness);
+        setPixel (j + myData.firstPixel, random(0, 256), random(0, 256), random(0, 256), 0, myData.applyBrightness);
       }
       myData.effectDelay = currentMilliSeconds + myData.intParam[0];
       myData.effectState = 3; // delay
@@ -507,7 +512,7 @@ bool TwinkleRandomEffect (effectData &myData) {
       j = effectMemory[i]; // grab location of pixel on strip
       setPixel (j + myData.firstPixel, 0, 0, 0, backgroundWhite, myData.applyBrightness); // Turn off current twinkle
       j = random(myData.effectVar[1] - 1);
-      setPixel (j + myData.firstPixel, random(0,256), random(0,256), random(0,256), 0, myData.applyBrightness);
+      setPixel (j + myData.firstPixel, random(0, 256), random(0, 256), random(0, 256), 0, myData.applyBrightness);
       effectMemory[i] = j; // store new twinkle location
       i = (i + 1) % myData.intParam[1]; // advance to next pixel looping back to zero when needed
       myData.effectDelay = currentMilliSeconds + myData.intParam[0];
@@ -534,8 +539,8 @@ bool TwinkleRandomEffect (effectData &myData) {
 }
 
 /*
-// Twinkle(10, 100, false);
-void Twinkle(unsigned int Count, unsigned int SpeedDelay, boolean OnlyOne) {
+  // Twinkle(10, 100, false);
+  void Twinkle(unsigned int Count, unsigned int SpeedDelay, boolean OnlyOne) {
   if (effectStart) {
     effectState = 0; // 0=startup, 1=setNextPixel, 2=delay
   }
@@ -574,7 +579,7 @@ void Twinkle(unsigned int Count, unsigned int SpeedDelay, boolean OnlyOne) {
       effectState = 0; // lost current state so restart effect
       break;
   }
-}
+  }
 */
 // effect. Should return true if effect has finished, false if effect wants more itterations
 bool SetOnePixelEffect (effectData &myData) {
@@ -658,8 +663,8 @@ bool CylonBounceEffect (effectData &myData) {
   return returnValue; // true if effect is finished. False for more itterations.
 }
 /*
-// CylonBounce(4, 10, 50);
-void CylonBounce(int EyeSize, int SpeedDelay, int ReturnDelay) {
+  // CylonBounce(4, 10, 50);
+  void CylonBounce(int EyeSize, int SpeedDelay, int ReturnDelay) {
   if (effectStart) {
     effectState = 0; // 0=startup, 1=display eye, 2=MoveDelay, 3=EndDelay
 
@@ -747,7 +752,7 @@ void CylonBounce(int EyeSize, int SpeedDelay, int ReturnDelay) {
   //  }
   //
   //  delay(ReturnDelay);
-}
+  }
 */
 // effect. Should return true if effect has finished, false if effect wants more itterations
 bool FireEffect (effectData &myData) {
@@ -830,7 +835,7 @@ bool FireEffect (effectData &myData) {
   return returnValue; // true if effect is finished. False for more itterations.
 }
 /*
-void setPixelHeatColor (int Pixel, byte temperature) {
+  void setPixelHeatColor (int Pixel, byte temperature) {
   // Scale 'heat' down from 0-255 to 0-191
   byte t192 = round((temperature / 255.0) * 191);
 
@@ -846,9 +851,9 @@ void setPixelHeatColor (int Pixel, byte temperature) {
   } else {                               // coolest
     setPixel(Pixel, heatramp, 0, 0, 0, true);
   }
-}
-// Fire(55,120,15);
-void Fire(int Cooling, int Sparking, int SpeedDelay) {
+  }
+  // Fire(55,120,15);
+  void Fire(int Cooling, int Sparking, int SpeedDelay) {
   byte heat[ledCount];
   int cooldown;
 
@@ -882,7 +887,7 @@ void Fire(int Cooling, int Sparking, int SpeedDelay) {
 
   showStrip();
   delay(SpeedDelay);
-}
+  }
 */
 // effect. Should return true if effect has finished, false if effect wants more itterations
 bool FadeInOutEffect (effectData &myData) {
@@ -931,8 +936,8 @@ bool FadeInOutEffect (effectData &myData) {
   return returnValue; // true if effect is finished. False for more itterations.
 }
 /*
-// FadeInOut();
-void FadeInOut() {
+  // FadeInOut();
+  void FadeInOut() {
   byte r, g, b, w;
   if (effectStart) {
     effectState = 0; // 0=startup, 1=fade, 2=MoveDelay, 3=EndDelay
@@ -1000,7 +1005,7 @@ void FadeInOut() {
   //    setAll(r, g, b, w);
   //    showStrip();
   //  }
-}
+  }
 */
 // effect. Should return true if effect has finished, false if effect wants more itterations
 bool StrobeEffect (effectData &myData) {
@@ -1050,11 +1055,11 @@ bool StrobeEffect (effectData &myData) {
   return returnValue; // true if effect is finished. False for more itterations.
 }
 /*
-// Slower:
-// Strobe(10, 100);
-// Fast:
-// Strobe(10, 50);
-void Strobe(int StrobeCount, int FlashDelay) {
+  // Slower:
+  // Strobe(10, 100);
+  // Fast:
+  // Strobe(10, 50);
+  void Strobe(int StrobeCount, int FlashDelay) {
   for (int j = 0; j < StrobeCount; j++) {
     //    if (shouldAbortEffect()) {
     //      return;
@@ -1066,7 +1071,7 @@ void Strobe(int StrobeCount, int FlashDelay) {
     showStrip();
     delay(FlashDelay);
   }
-}
+  }
 */
 // effect. Should return true if effect has finished, false if effect wants more itterations
 bool TheaterChaseEffect (effectData &myData) {
@@ -1122,8 +1127,8 @@ bool TheaterChaseEffect (effectData &myData) {
   return returnValue; // true if effect is finished. False for more itterations.
 }
 /*
-// theaterChase(50);
-void theaterChase(int SpeedDelay) {
+  // theaterChase(50);
+  void theaterChase(int SpeedDelay) {
   for (int q = 0; q < 3; q++) {
     //    if (shouldAbortEffect()) {
     //      return;
@@ -1139,7 +1144,7 @@ void theaterChase(int SpeedDelay) {
       setPixel(i + q, 0, 0, 0, 0, false);  //turn every third pixel off
     }
   }
-}
+  }
 */
 // effect. Should return true if effect has finished, false if effect wants more itterations
 bool RainbowCycleEffect (effectData &myData) {
@@ -1197,7 +1202,7 @@ bool RainbowCycleEffect (effectData &myData) {
   return returnValue; // true if effect is finished. False for more itterations.
 }
 /*
-byte * Wheel(byte WheelPos) {
+  byte * Wheel(byte WheelPos) {
   static byte c[3];
   byte increasing = WheelPos * 3; // Yes overflow is expected and desired.
   byte decreasing = 255 - increasing;
@@ -1218,9 +1223,9 @@ byte * Wheel(byte WheelPos) {
   }
 
   return c;
-}
-//  rainbowCycle(20);
-void rainbowCycle(int SpeedDelay) {
+  }
+  //  rainbowCycle(20);
+  void rainbowCycle(int SpeedDelay) {
   byte *c;
   uint16_t i, j;
 
@@ -1235,7 +1240,7 @@ void rainbowCycle(int SpeedDelay) {
     showStrip();
     delay(SpeedDelay);
   }
-}
+  }
 */
 // effect. Should return true if effect has finished, false if effect wants more itterations
 bool ColorWipeEffect (effectData &myData) {
@@ -1268,8 +1273,8 @@ bool ColorWipeEffect (effectData &myData) {
   return returnValue; // true if effect is finished. False for more itterations.
 }
 /*
-//  colorWipe(50);
-void colorWipe(int SpeedDelay) {
+  //  colorWipe(50);
+  void colorWipe(int SpeedDelay) {
   for (uint16_t i = 0; i < ledCount; i++) {
     //    if (shouldAbortEffect()) {
     //      return;
@@ -1279,10 +1284,10 @@ void colorWipe(int SpeedDelay) {
     delay(SpeedDelay);
   }
   transitionDone = true;
-}
+  }
 
-//  colorWipeOnce(50);
-void colorWipeOnce(int SpeedDelay) {
+  //  colorWipeOnce(50);
+  void colorWipeOnce(int SpeedDelay) {
   colorWipe(SpeedDelay);
 
   // Reset back to previous color
@@ -1292,17 +1297,18 @@ void colorWipeOnce(int SpeedDelay) {
   white = previousWhite;
 
   colorWipe(SpeedDelay);
-}
+  }
 */
 
 // effect. Should return true if effect has finished, false if effect wants more itterations
 bool RunningLightsEffect (effectData &myData) {
   // intParam[0] is delay for how moving speed
+  // intParam[1] is the stretch factor on the sin wave
   bool returnValue = false;
   unsigned int i;
   byte strength, r, g, b, w;
-  unsigned int offset = myData.effectVar[0];
-
+  float offset = myData.effectVar[0];
+  float stretch;
   switch (myData.effectState) {
     case 0: // init or startup
       myData.effectVar[0] = 0; // Offset in sin wave vs pixel position
@@ -1310,8 +1316,11 @@ bool RunningLightsEffect (effectData &myData) {
       break;
 
     case 2: // Display next wave
-      for (i=myData.firstPixel; i <= myData.lastPixel; ++i) {
-        strength = sin(i + offset) * 127.0 + 128.0;
+      stretch = myData.intParam[1];
+      offset = offset / stretch;
+      for (i = myData.firstPixel; i <= myData.lastPixel; ++i) {
+        float fi = i;
+        strength = sin(fi / stretch + offset) * 127.0 + 128.0;
         r = map (strength, 0, 255, 0, myData.r);
         g = map (strength, 0, 255, 0, myData.g);
         b = map (strength, 0, 255, 0, myData.b);
@@ -1319,6 +1328,7 @@ bool RunningLightsEffect (effectData &myData) {
         setPixel (i, r, g, b, w, false);
       }
       myData.effectDelay = currentMilliSeconds + myData.intParam[0]; // pause for speed delay
+      ++myData.effectVar[0];
       myData.effectState = 3; // delay
       break;
 
@@ -1336,8 +1346,8 @@ bool RunningLightsEffect (effectData &myData) {
 }
 
 /*
-//  RunningLights(50);
-void RunningLights(int WaveDelay) {
+  //  RunningLights(50);
+  void RunningLights(int WaveDelay) {
   int Position = 0;
 
   for (int i = 0; i < ledCount; i++)
@@ -1361,7 +1371,7 @@ void RunningLights(int WaveDelay) {
     showStrip();
     delay(WaveDelay);
   }
-}
+  }
 */
 
 // effect. Should return true if effect has finished, false if effect wants more itterations
@@ -1386,7 +1396,7 @@ bool SnowSparkleEffect (effectData &myData) {
         myData.effectDelay = currentMilliSeconds + myData.intParam[1];
       } else {
         // no so select a new pixel and lite then delay
-        myData.effectVar[0] = random(myData.firstPixel, myData.lastPixel+1); // which pixel is sparking
+        myData.effectVar[0] = random(myData.firstPixel, myData.lastPixel + 1); // which pixel is sparking
         setPixel (myData.effectVar[0], 0, 0, 0, 255, false);
         myData.effectVar[1] = 1; // note that pixel is on
         myData.effectDelay = currentMilliSeconds + myData.intParam[0];
@@ -1408,8 +1418,8 @@ bool SnowSparkleEffect (effectData &myData) {
 }
 
 /*
-//  SnowSparkle(20, random(100,1000));
-void SnowSparkle(int SparkleDelay, int SpeedDelay) {
+  //  SnowSparkle(20, random(100,1000));
+  void SnowSparkle(int SparkleDelay, int SpeedDelay) {
   setAll(red, green, blue, white);
 
   int Pixel = random(ledCount);
@@ -1419,7 +1429,7 @@ void SnowSparkle(int SparkleDelay, int SpeedDelay) {
   setPixel(Pixel, red, green, blue, white, false);
   showStrip();
   delay(SpeedDelay);
-}
+  }
 */
 
 // effect. Should return true if effect has finished, false if effect wants more itterations
@@ -1444,7 +1454,7 @@ bool SparkleEffect (effectData &myData) {
         myData.effectDelay = currentMilliSeconds + myData.intParam[1];
       } else {
         // no so select a new pixel and lite then delay
-        myData.effectVar[0] = random(myData.firstPixel, myData.lastPixel+1); // which pixel is sparking
+        myData.effectVar[0] = random(myData.firstPixel, myData.lastPixel + 1); // which pixel is sparking
         setPixel (myData.effectVar[0], myData.r, myData.g, myData.b, myData.w, false);
         myData.effectVar[1] = 1; // note that pixel is on
         myData.effectDelay = currentMilliSeconds + myData.intParam[0];
@@ -1466,20 +1476,20 @@ bool SparkleEffect (effectData &myData) {
 }
 
 /*
-//  Sparkle(0);
-void Sparkle(int SpeedDelay) {
+  //  Sparkle(0);
+  void Sparkle(int SpeedDelay) {
   setAll(0, 0, 0, 0);
   int Pixel = random(ledCount);
   setPixel(Pixel, red, green, blue, white, false);
   showStrip();
   delay(SpeedDelay);
   setPixel(Pixel, 0, 0, 0, 0, false);
-}
+  }
 */
 
 /*
-//  TwinkleRandom(20, 100, false);
-void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
+  //  TwinkleRandom(20, 100, false);
+  void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
   setAll(0, 0, 0, 0);
 
   for (int i = 0; i < Count; i++) {
@@ -1495,7 +1505,7 @@ void TwinkleRandom(int Count, int SpeedDelay, boolean OnlyOne) {
   }
 
   delay(SpeedDelay);
-}
+  }
 */
 
 typedef struct bouncingBallsData {
@@ -1535,7 +1545,7 @@ bool BouncingBallsEffect (effectData &myData) {
         for (int i = 0 ; i < ballCount ; i++) {
           ballData[i].ClockTimeSinceLastBounce = millis();
           ballData[i].Height = StartHeight;
-          ballData[i].Position = 0;
+          ballData[i].Position = myData.firstPixel;
           ballData[i].ImpactVelocity = ImpactVelocityStart;
           ballData[i].TimeSinceLastBounce = 0;
           ballData[i].Dampening = 0.90 - float(i) / pow(ballCount, 2);
@@ -1559,8 +1569,8 @@ bool BouncingBallsEffect (effectData &myData) {
             ballData[i].ImpactVelocity = ImpactVelocityStart;
           }
         }
-        ballData[i].Position = round( ballData[i].Height * (ledCount - 1) / StartHeight);
-        setPixel(ballData[i].Position, red, green, blue, white, false);
+        ballData[i].Position = round( ballData[i].Height * (ledCount - 1) / StartHeight) + myData.firstPixel;
+        setPixel(ballData[i].Position, myData.r, myData.g, myData.b, myData.w, false);
       }
       break;
 
@@ -1580,8 +1590,8 @@ bool BouncingBallsEffect (effectData &myData) {
 }
 
 /*
-// BouncingBalls(3);
-void BouncingBalls(int BallCount) {
+  // BouncingBalls(3);
+  void BouncingBalls(int BallCount) {
   float Gravity = -9.81;
   int StartHeight = 1;
 
@@ -1629,7 +1639,7 @@ void BouncingBalls(int BallCount) {
     showStrip();
     setAll(0, 0, 0, 0);
   }
-}
+  }
 */
 
 /**************************** START TRANSITION FADER *****************************************/
@@ -1658,14 +1668,14 @@ void BouncingBalls(int BallCount) {
   between adjustments in the value.
 */
 /*
-int calculateStep(int prevValue, int endValue) {
+  int calculateStep(int prevValue, int endValue) {
   int step = endValue - prevValue;  // What's the overall gap?
   if (step) {                       // If its non-zero,
     step = 1020 / step;            //   divide by 1020
   }
 
   return step;
-}
+  }
 */
 /* The next function is calculateVal. When the loop value, i,
    reaches the step size appropriate for one of the
@@ -1673,7 +1683,7 @@ int calculateStep(int prevValue, int endValue) {
    (R, G, and B are each calculated separately.)
 */
 /*
-int calculateVal(int step, int val, int i) {
+  int calculateVal(int step, int val, int i) {
   if ((step) && i % step == 0) { // If step is non-zero and its time to change a value,
     if (step > 0) {              //   increment the value if step is positive...
       val += 1;
@@ -1692,11 +1702,11 @@ int calculateVal(int step, int val, int i) {
   }
 
   return val;
-}
+  }
 */
 /*
-// Fade(50);
-void Fade(int SpeedDelay) {
+  // Fade(50);
+  void Fade(int SpeedDelay) {
   int redVal = previousRed;
   int grnVal = previousGreen;
   int bluVal = previousBlue;
@@ -1731,7 +1741,7 @@ void Fade(int SpeedDelay) {
 
   setAll(redVal, grnVal, bluVal, whiVal); // Write current values to LED pins
   //transitionDone = true;
-}
+  }
 */
 
 // Lightning effect. Should return true if effect has finished, false if effect wants more itterations
@@ -1747,7 +1757,7 @@ bool LightingingEffect (effectData &myData) {
   int ledCount = myData.lastPixel  - myData.firstPixel + 1;
   int strikeLength = myData.effectVar[2] - myData.effectVar[1] + 1;
   unsigned int i;
-  byte r,g,b,w, dimmer;
+  byte r, g, b, w, dimmer;
 
   switch (myData.effectState) {
     case 0: // init or startup
@@ -1762,14 +1772,14 @@ bool LightingingEffect (effectData &myData) {
 
     case 2: // Display flash
       if (myData.effectVar[0] == 0) { // time to start next dim sequence
-        myData.effectVar[0] = random(myData.intParam[2],myData.intParam[3]+1); // Dimmer prestrikes left
+        myData.effectVar[0] = random(myData.intParam[2], myData.intParam[3] + 1); // Dimmer prestrikes left
         //Serial.print ("Dim flashes:"); Serial.print(myData.effectVar[0]);
         // Bright flash is entire pixel range. Each dim flash should grown in size.
         // Growth per flash should be (pixel range)/(dim flashes + 2)
         // The Plus two is fudge factor so bright flash has strip to grow into and to leave
         //   some room for random moving of dim flashes
-        myData.effectVar[3] = (myData.lastPixel - myData.firstPixel + 1)/(myData.effectVar[0] + 2);
-       // Serial.print ("  Dim growth step size:"); Serial.println(myData.effectVar[3]);
+        myData.effectVar[3] = (myData.lastPixel - myData.firstPixel + 1) / (myData.effectVar[0] + 2);
+        // Serial.print ("  Dim growth step size:"); Serial.println(myData.effectVar[3]);
         myData.effectVar[4] = myData.effectVar[3]; // first dim flash is length of step size
       }
 
@@ -1779,8 +1789,8 @@ bool LightingingEffect (effectData &myData) {
         // Erase prior flash incase next flash is far enough away so as to not overlap
         FillPixels (myData.effectVar[1], myData.effectVar[2], 0, 0, 0, 0, false);
         // Calculate new flash
-        myData.effectVar[1] = random(0,((pixelRange-flashRange)/2)) + myData.firstPixel; // prestrike start
-        myData.effectVar[2] = myData.effectVar[1]+flashRange-1; // prestrike end
+        myData.effectVar[1] = random(0, ((pixelRange - flashRange) / 2)) + myData.firstPixel; // prestrike start
+        myData.effectVar[2] = myData.effectVar[1] + flashRange - 1; // prestrike end
         myData.effectVar[4] += myData.effectVar[3]; // grow next flash size.
         // dimmer = random(10,brightness/4);
         dimmer = brightness / 10;
@@ -1789,14 +1799,14 @@ bool LightingingEffect (effectData &myData) {
         b = map(myData.b, 0, 255, 0, dimmer);
         w = map(myData.w, 0, 255, 0, dimmer);
         FillPixels (myData.effectVar[1], myData.effectVar[2], r, g, b, w, false);
-//        Serial.print (myData.effectVar[1]); Serial.print(":"); Serial.print(myData.effectVar[2]);
-//        Serial.print (" - "); Serial.println(myData.effectVar[2] - myData.effectVar[1] + 1);
-        myData.effectDelay = currentMilliSeconds + random(4,15)*myData.intParam[0];
+        //        Serial.print (myData.effectVar[1]); Serial.print(":"); Serial.print(myData.effectVar[2]);
+        //        Serial.print (" - "); Serial.println(myData.effectVar[2] - myData.effectVar[1] + 1);
+        myData.effectDelay = currentMilliSeconds + random(4, 15) * myData.intParam[0];
         myData.effectState = 3; // delay dim
       } else {
         FillPixels (myData.firstPixel, myData.lastPixel, myData.r, myData.g, myData.b, myData.w, false);
-//        Serial.println("Bright");
-        myData.effectDelay = currentMilliSeconds + random(4,15)*myData.intParam[0];
+        //        Serial.println("Bright");
+        myData.effectDelay = currentMilliSeconds + random(4, 15) * myData.intParam[0];
         myData.effectState = 4; // delay bright
       }
       break;
@@ -1819,7 +1829,7 @@ bool LightingingEffect (effectData &myData) {
     case 4: // delay on bright
       if (currentMilliSeconds >= myData.effectDelay) {
         FillPixels (myData.firstPixel, myData.lastPixel, 0, 0, 0, 0, false);  // end flash delay for dark time
-        myData.effectDelay = currentMilliSeconds + 500 + (random(500,1000)*myData.intParam[1]); // dark time between flashes
+        myData.effectDelay = currentMilliSeconds + 500 + (random(500, 1000) * myData.intParam[1]); // dark time between flashes
         myData.effectState = 5; // Delay off
       }
       break;
@@ -1833,7 +1843,7 @@ bool LightingingEffect (effectData &myData) {
 }
 
 /*
-void Lightning(int SpeedDelay) {
+  void Lightning(int SpeedDelay) {
   setAll(0, 0, 0, 0);
   int ledstart = random(ledCount);           // Determine starting location of flash
   int ledlen = random(ledCount - ledstart);  // Determine length of flash (not to go beyond ledCount-1)
@@ -1857,7 +1867,7 @@ void Lightning(int SpeedDelay) {
     delay(50 + random(100));             // shorter delay between strokes
   }
   delay(random(SpeedDelay) * 50);        // delay between strikes
-}
+  }
 */
 
 // MeteorRain effect. Should return true if effect has finished, false if effect wants more itterations
@@ -1875,6 +1885,10 @@ bool MeteorRainEffect (effectData &myData) {
     case 0: // init or startup
       myData.effectVar[0] = myData.firstPixel; // start of head of meteor
       myData.effectVar[1] = 0; // unused
+      //Handle corner case of 0 where the math breaks
+      if (myData.intParam[1] == 0) {
+        myData.intParam[1] = 1;
+      }
       myData.effectVar[2] = 0; // unused
       myData.effectVar[3] = 0; // unused
       myData.effectVar[4] = 0; // unused
@@ -1885,18 +1899,18 @@ bool MeteorRainEffect (effectData &myData) {
     case 2: // Display meteor
       // fade all lit pixels
       allBlack = true;
-      for (i=myData.firstPixel; i <= myData.lastPixel; ++i) {
-        if (((myData.intParam[3] == 0) || (random(10)>5))) {
+      for (i = myData.firstPixel; i <= myData.lastPixel; ++i) {
+        if (((myData.intParam[3] == 0) || (random(10) > 5))) {
           // fade current pixel
           allBlack &= fadeToBlack (i, myData.intParam[2]);
         }
       }
-      
+
       // Draw meteor
       meteorHeadStart = myData.effectVar[0];
       if (meteorHeadStart < myData.lastPixel) {
         meteorHeadStop = meteorHeadStart + myData.intParam[1];
-        if (meteorHeadStop > myData.lastPixel) 
+        if (meteorHeadStop > myData.lastPixel)
           meteorHeadStop = myData.lastPixel;
         FillPixels(meteorHeadStart, meteorHeadStop, myData.r, myData.g, myData.b, myData.w, false);
         ++myData.effectVar[0]; // advance meteor head
@@ -1905,7 +1919,7 @@ bool MeteorRainEffect (effectData &myData) {
         myData.effectVar[0] = 0;
       }
       myData.effectDelay = currentMilliSeconds + myData.intParam[0];
-      myData.effectState = 3; // Delay 
+      myData.effectState = 3; // Delay
       break;
 
     case 3: // delay on dim
@@ -1924,7 +1938,7 @@ bool MeteorRainEffect (effectData &myData) {
 
 
 /*
-void ShowPixels() {
+  void ShowPixels() {
   // If there are only 2 items in the array then we are setting from and to othersise set each led in the array.
   if (pixelLen == 2) {
     //Serial.println(F("ShowPixels-Range"));
@@ -1947,7 +1961,7 @@ void ShowPixels() {
   }
   showStrip();
   //transitionDone = true;
-}
+  }
 
 */
 

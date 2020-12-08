@@ -224,6 +224,8 @@ void setup() {
 
   // client.setServer(MQTT_SERVER, MQTT_PORT);
   // client.setCallback(mqttCallback);
+  // Temp delay so all strips have power (Networking coming up should fix this)
+  delay(250);
   FillPixels(0,lastPixel, red, green, blue, white, true);
   if (debugPrint) {
     Serial.println();
